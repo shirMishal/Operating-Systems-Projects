@@ -65,6 +65,25 @@ myproc(void) {
   return p;
 }
 
+
+// Update the minimum accumulator of active processes to p, or 0 if p is the only active process.
+// Assumes the the ptable lock is acquired.
+void update_min_acc(struct proc* p){
+  long long min_acc = __LONG_LONG_MAX__;
+  int active_processes = 0;
+  for(struct proc* proc = ptable.proc; proc < &ptable.proc[NPROC]; proc++){
+    if ((proc->state == RUNNING || proc->state == RUNNABLE) && proc->accumulator < min_acc){
+      active_processes++;
+      min_acc = proc->accumulator;
+    }
+  }
+  if (active_processes == 0){
+    min_acc = 0;
+  }
+
+  p->accumulator = min_acc;
+}
+
 //PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
 // If found, change state to EMBRYO and initialize
@@ -78,10 +97,10 @@ allocproc(void)
 
   acquire(&ptable.lock);
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == UNUSED)
       goto found;
-
+  }
   release(&ptable.lock);
   return 0;
 
@@ -112,6 +131,21 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+
+  // Added by us -- accumulator for new processes
+  
+
+  acquire(&ptable.lock);
+
+  update_min_acc(p);
+
+  release(&ptable.lock);
+
+  p->ps_priority = 5;
+  p->rtime = 0;
+  p->retime = 0;
+  p ->stime = 0;
+  
   return p;
 }
 
@@ -199,6 +233,7 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -319,20 +354,125 @@ wait(int* status)
   }
 }
 
-//PAGEBREAK: 42
-// Per-CPU process scheduler.
-// Each CPU calls scheduler() after setting itself up.
-// Scheduler never returns.  It loops, doing:
-//  - choose a process to run
-//  - swtch to start running that process
-//  - eventually that process transfers control
-//      via swtch back to the scheduler.
 void
-scheduler(void)
+priority_scheduler(struct cpu* c)
 {
   struct proc *p;
-  struct cpu *c = mycpu();
-  c->proc = 0;
+  
+  for(;;){
+    // Enable interrupts on this processor.
+    sti();
+
+    // Loop over process table looking for process to run.
+    acquire(&ptable.lock);
+    struct proc* min_acc_proc = null;
+    long long min_acc = __LONG_LONG_MAX__;
+    int runnable_exists = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+
+      if (p->state != RUNNABLE)
+        continue;
+
+      if (p->accumulator < min_acc){
+        runnable_exists = 1;
+        min_acc = p->accumulator;
+        min_acc_proc = p;
+      }
+    }
+
+    // if the are no runnable processes, search again
+
+    if (!runnable_exists){
+      goto cont;
+    }
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.
+    c->proc = min_acc_proc;
+    switchuvm(min_acc_proc);
+    min_acc_proc->state = RUNNING;
+
+    swtch(&(c->scheduler), min_acc_proc->context);
+    switchkvm();
+
+    min_acc_proc->accumulator += min_acc_proc->ps_priority;
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    c->proc = 0;
+
+    cont:
+
+    release(&ptable.lock);
+
+    if (sched_type != PRIORITY_SCHEDULER){
+      return;
+    }
+  }
+}
+
+void
+fair_scheduler(struct cpu* c)
+{
+  struct proc *p;
+  
+  for(;;){
+    // Enable interrupts on this processor.
+    sti();
+
+    // Loop over process table looking for process to run.
+    acquire(&ptable.lock);
+    struct proc* min_ratio_proc = null;
+    float min_ratio = __LONG_LONG_MAX__;
+    int runnable_exists = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+
+      if (p->state != RUNNABLE)
+        continue;
+
+      float ratio = ((p->rtime) * (p->cfs_decay_factor)) / (p->rtime + p->retime + p->stime);
+      if (ratio < min_ratio){
+        runnable_exists = 1;
+        min_ratio = ratio;
+        min_ratio_proc = p;
+      }
+    }
+
+    // if the are no runnable processes, search again
+
+    if (!runnable_exists){
+      goto cont;
+    }
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.
+    c->proc = min_ratio_proc;
+    switchuvm(min_ratio_proc);
+    min_ratio_proc->state = RUNNING;
+
+    swtch(&(c->scheduler), min_ratio_proc->context);
+    switchkvm();
+
+    min_ratio_proc->accumulator += min_ratio_proc->ps_priority;
+
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    c->proc = 0;
+
+    cont:
+
+    release(&ptable.lock);
+
+    if (sched_type != COMPLETELY_FAIR_SCHEDULER){
+      return;
+    }
+  }
+}
+
+void
+default_scheduler(struct cpu* c)
+{
+  struct proc *p;
+  
   
   for(;;){
     // Enable interrupts on this processor.
@@ -354,14 +494,53 @@ scheduler(void)
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
+      p->accumulator += p->ps_priority;
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
+
+      if (sched_type != DEFAULT_SCHEDULER){
+        release(&ptable.lock);
+        return;
+      }
     }
     release(&ptable.lock);
 
   }
+
 }
+
+
+//PAGEBREAK: 42
+// Per-CPU process scheduler.
+// Each CPU calls scheduler() after setting itself up.
+// Scheduler never returns.  It loops, doing:
+//  - choose a process to run
+//  - swtch to start running that process
+//  - eventually that process transfers control
+//      via swtch back to the scheduler.
+void
+scheduler(void)
+{
+  struct cpu *c = mycpu();
+  c->proc = 0;
+  for (;;){
+    switch (sched_type){
+    case DEFAULT_SCHEDULER:
+      default_scheduler(c);
+      break;
+    case PRIORITY_SCHEDULER:
+      priority_scheduler(c);
+      break;
+    case COMPLETELY_FAIR_SCHEDULER:
+      fair_scheduler(c);
+      break;
+    default:
+      panic("bad scheduler type");
+    }
+  }
+}
+
 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores
@@ -388,6 +567,28 @@ sched(void)
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
 }
+
+void update_ptable_stats(){
+  acquire(&ptable.lock);
+  for(struct proc* proc = ptable.proc; proc < &ptable.proc[NPROC]; proc++){
+    switch (proc->state)
+    {
+    case RUNNING:
+      proc->rtime++;
+      break;
+    case RUNNABLE:
+      proc->retime++;
+      break;
+    case SLEEPING:
+      proc->stime++;
+      break;
+    default:
+      break;
+    }
+  }
+  release(&ptable.lock);
+}
+
 
 // Give up the CPU for one scheduling round.
 void
@@ -468,8 +669,10 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
+      update_min_acc(p);
       p->state = RUNNABLE;
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -539,4 +742,54 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+int set_ps_priority(int priority){
+  if (priority > 10 || priority < 1){
+    return -1;
+  }
+  else{
+    myproc()->ps_priority = priority;
+    return 0;
+  }
+}
+
+int policy(int policy){
+  if (policy > 3 || policy < 0){
+    return -1; 
+  }
+  else{
+    sched_type = policy;
+    return 0;
+  } 
+}
+
+int set_cfs_priority(int priority){
+  float decay_factor;
+
+  switch (priority){
+    case 1:
+      decay_factor = 0.75;
+      break;
+    case 2:
+      decay_factor = 1;
+      break;
+    case 3:
+      decay_factor = 1.25;
+      break;
+    default:
+      return -1;
+  }
+
+  myproc()->cfs_decay_factor = decay_factor;
+  return 0;
+}
+
+int proc_info(struct perf* performance){
+  struct proc* p = myproc();
+  performance->ps_priority = p->ps_priority;
+  performance->retime = p->retime;
+  performance->rtime = p->rtime;
+  performance->stime = p->stime;
+  return 0; // TODO: verify this
 }

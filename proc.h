@@ -50,6 +50,14 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   int exit_status;             // Process' exit status
+
+  int ps_priority;             // Process' priority. can be 0-10    for priority scheduler.
+  long long accumulator;       // Process' accumulator              for priority scheduler.
+
+  float cfs_decay_factor;      // Process' decay factor             for CFS.
+  int rtime;             // Total time process was running    for CFS.
+  int retime;            // Total time process was runnable   for CFS.
+  int stime;             // Total time process was sleeping   for CFS.
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -57,3 +65,6 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+
+void update_ptable_stats(void);
+

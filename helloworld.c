@@ -5,6 +5,7 @@
 
 
 int main(int argc, char** argv){
+    policy(1);
     int pid = fork();
     if (pid != 0){
         int exit_code;

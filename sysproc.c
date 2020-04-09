@@ -97,3 +97,29 @@ sys_uptime(void)
 int sys_memsize(void){
   return myproc()->sz;
 }
+
+int sys_set_ps_priority(void)
+{
+  int priority;
+  argint(0, &priority);
+  return set_ps_priority(priority);
+}
+
+int sys_policy(void)
+{
+  int policy_type;
+  argint(0, &policy_type);
+  return policy(policy_type);
+}
+
+int sys_set_cfs_priority(void){
+  int priority;
+  argint(0, &priority);
+  return set_cfs_priority(priority);
+}
+
+int sys_proc_info(void){
+  char* performance;
+  argptr(0, &performance, sizeof(struct perf));
+  return proc_info((struct perf*) performance);
+}
