@@ -20,11 +20,19 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+int sigkill();
+
+int sigcont();
+
+int sigstop();
+
 void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
 }
+
+
 
 // Must be called with interrupts disabled
 int
@@ -37,17 +45,17 @@ cpuid() {
 struct cpu*
 mycpu(void)
 {
-  int apicid, i;
+  int apicid, signum;
   
   if(readeflags()&FL_IF)
     panic("mycpu called with interrupts enabled\n");
   
   apicid = lapicid();
   // APIC IDs are not guaranteed to be contiguous. Maybe we should have
-  // a reverse map, or reserve a register to store &cpus[i].
-  for (i = 0; i < ncpu; ++i) {
-    if (cpus[i].apicid == apicid)
-      return &cpus[i];
+  // a reverse map, or reserve a register to store &cpus[signum].
+  for (signum = 0; signum < ncpu; ++signum) {
+    if (cpus[signum].apicid == apicid)
+      return &cpus[signum];
   }
   panic("unknown apicid\n");
 }
@@ -133,12 +141,13 @@ found:
   p->blocked_signal_mask = 0;
   p->pending_signals = 0;
 
-  for (int i = 0; i < 32; i++){
+  for (int signum = 0; signum < 32; signum++){
     // 16 bytes struct
-    p->signal_handlers[i].sa_handler = SIG_DFL;
-    p->signal_handlers[i].sigmask = 0;
+    p->signal_handlers[signum].sa_handler = SIG_DFL;
+    p->signal_handlers[signum].sigmask = 0;
   }
 
+  p->flag_frozen = 0;
   return p;
 }
 
@@ -210,7 +219,7 @@ growproc(int n)
 int
 fork(void)
 {
-  int i, pid;
+  int signum, pid;
   struct proc *np;
   struct proc *curproc = myproc();
 
@@ -233,9 +242,9 @@ fork(void)
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
-  for(i = 0; i < NOFILE; i++)
-    if(curproc->ofile[i])
-      np->ofile[i] = filedup(curproc->ofile[i]);
+  for(signum = 0; signum < NOFILE; signum++)
+    if(curproc->ofile[signum])
+      np->ofile[signum] = filedup(curproc->ofile[signum]);
   np->cwd = idup(curproc->cwd);
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
@@ -251,10 +260,11 @@ fork(void)
   // Inheriting parent's signal mask and handlers
 
   np->blocked_signal_mask = np->parent->blocked_signal_mask;
+  np->pending_signals = 0;
 
-  for (int i = 0; i < 32; i++){
+  for (int signum = 0; signum < 32; signum++){
     // 16 bytes struct
-    np->signal_handlers[i] = np->parent->signal_handlers[i];
+    np->signal_handlers[signum] = np->parent->signal_handlers[signum];
   }
 
   return pid;
@@ -372,11 +382,11 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if (p->state == FROZEN){
+      if (p->flag_frozen){
         uint cont_mask = (1 << SIGCONT);
-        if (p->pending_signals & cont_mask != 0){
+        if ((p->pending_signals & cont_mask) != 0){
           sigcont();
-          p->pending_signals = (p->pending_signals) & !(cont_mask);
+          p->pending_signals = (p->pending_signals) & ~(cont_mask);
         }
         else{
           continue;
@@ -522,6 +532,10 @@ wakeup(void *chan)
   release(&ptable.lock);
 }
 
+int is_blocked(uint mask, int signum){
+  return (mask & (1 << signum));
+}
+
 // Kill the process with the given pid.
 // Process won't exit until it returns
 // to user space (see trap in trap.c).
@@ -532,7 +546,7 @@ kill(int pid, int signum)
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
-      if ((signum == SIGKILL || signum == SIGKILL) && p->state == SLEEPING){
+      if (p->state == SLEEPING && (((int)(p->signal_handlers[signum].sa_handler) == SIGKILL && !is_blocked(p->blocked_signal_mask, signum)) || signum == SIGKILL || signum == SIGSTOP)){
         p->state = RUNNABLE;
       }
       p->pending_signals = p->pending_signals | (1 << signum);
@@ -560,7 +574,7 @@ procdump(void)
   [RUNNING]   "run   ",
   [ZOMBIE]    "zombie"
   };
-  int i;
+  int signum;
   struct proc *p;
   char *state;
   uint pc[10];
@@ -575,8 +589,8 @@ procdump(void)
     cprintf("%d %s %s", p->pid, state, p->name);
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
-      for(i=0; i<10 && pc[i] != 0; i++)
-        cprintf(" %p", pc[i]);
+      for(signum=0; signum<10 && pc[signum] != 0; signum++)
+        cprintf(" %p", pc[signum]);
     }
     cprintf("\n");
   }
@@ -588,7 +602,7 @@ uint sigprocmask(uint sigmask){
   uint kill_mask = 1 << SIGKILL;
   uint cont_mask = 1 << SIGCONT;
   uint stop_mask = 1 << SIGSTOP;
-  myproc()->blocked_signal_mask = sigmask & !(kill_mask | stop_mask | cont_mask);
+  myproc()->blocked_signal_mask = sigmask & ~(kill_mask | stop_mask | cont_mask);
   return temp;
 }
 
@@ -610,8 +624,11 @@ int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 }
 
 void sigret(){
-
-}
+  struct proc* p = myproc();
+  *(p->tf) = *(p->user_trapframe_backup);
+  p->blocked_signal_mask = p->mask_backup;
+  return;
+ }
 
 // Signals implementation
 // Assumed that the signal is being clear from the pending signals by the caller
@@ -623,12 +640,79 @@ sigkill(){
 
 int 
 sigcont(){
-  myproc()->state = RUNNABLE;
+  myproc()->flag_frozen = 0;
   return 0;
 }
 
 int 
 sigstop(){
-  myproc()->state = FROZEN;
+  myproc()->flag_frozen = 1;
   return 0;
+}
+
+void dummy(){
+  int x = 1;
+  x++;
+  return;
+}
+
+void handle_signals(){
+  struct proc* p = myproc();
+  if (p == null){
+    return;
+  }
+  dummy();
+  uint mask = p->blocked_signal_mask;
+  uint pending = p->pending_signals;
+  uint signals_to_handle = (~mask) & pending;
+  for (int signum = 0; signum < 32; signum++){
+    if (((signals_to_handle >> signum) & 0x1) == 0){
+        continue;
+    }
+    // turning off the bit in pending signals
+    p->pending_signals ^= 1 << signum;
+
+    // handle if kernel handler
+    int sa_handler = (int)p->signal_handlers[signum].sa_handler;
+    switch (sa_handler){
+      case SIGKILL:
+        sigkill();
+        break;
+      case SIGSTOP:
+        sigstop();
+        break;
+      case SIGCONT:
+        sigcont();
+        break;
+      case SIG_IGN:
+        break;
+      case SIG_DFL:
+        if (signum == SIGSTOP){
+          sigstop();
+        }
+        else if (signum == SIGCONT){
+          sigcont();
+        }
+        else{
+          sigkill();
+        }
+        break;
+      default:
+        // user signal handler
+        p->mask_backup = p->blocked_signal_mask;
+        p->blocked_signal_mask = p->signal_handlers[signum].sigmask;
+        *(p->user_trapframe_backup) = *(p->tf);
+        char call_sigret[7] = { 0xB8, 0x18, 0x00, 0x00, 0x00, 0xCD, 0x40 };
+        // 7 bytes for the compiled code calling to sigret (mov eax, 0x18 ; int 0x40)
+        // 4 bytes for signum param and 4 bytes for the return address
+        p->tf->esp -= 0xF;
+        *((int*)(p->tf->esp)) = p->tf->esp + 0x8;
+        *((int*)(p->tf->esp + 4)) = signum;
+        for (int i = 0; i < 7; i++){
+          *((char *)(p->tf->esp + i)) = call_sigret[i];
+        }
+        p->tf->eip = sa_handler;
+        return;
+    }
+  }
 }

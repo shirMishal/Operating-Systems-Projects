@@ -8,6 +8,8 @@
 #include "traps.h"
 #include "memlayout.h"
 
+#define SIGKILL 9
+
 char buf[8192];
 char name[3];
 char *echoargv[] = { "echo", "ALL", "TESTS", "PASSED", 0 };

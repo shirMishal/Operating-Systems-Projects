@@ -32,7 +32,7 @@ struct context {
   uint eip;
 };
 
-enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE, FROZEN };
+enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
@@ -50,8 +50,10 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   
+  int flag_frozen;
   uint pending_signals;        // Represents the received signals
   uint blocked_signal_mask;            // Mask for blocked signals
+  uint mask_backup;                    // Backup for mask while process is running
   struct sigaction signal_handlers[32];   // Array of pointers to handlers OR default values
   struct trapframe* user_trapframe_backup; // Trapframe backup for returning from kernel space
 };
