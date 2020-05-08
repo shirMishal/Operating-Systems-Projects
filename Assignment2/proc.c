@@ -360,6 +360,21 @@ wait(void)
   }
 }
 
+int has_cont_pending(struct proc* p){
+  for (int i = 0; i < 32; i++){
+    if (!((1 << i) & p->pending_signals)){
+      continue;
+    }
+    if (i == SIGCONT && p->signal_handlers[i].sa_handler == SIG_DFL){
+      return 1;
+    }
+    if ((int)(p->signal_handlers[i].sa_handler) == SIGCONT){
+      return 1;
+    }
+  }
+  return 0;
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -382,18 +397,23 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if (p->flag_frozen){
-        uint cont_mask = (1 << SIGCONT);
-        if ((p->pending_signals & cont_mask) != 0){
-          sigcont();
-          p->pending_signals = (p->pending_signals) & ~(cont_mask);
-        }
-        else{
-          continue;
-        }
-      }
       if(p->state != RUNNABLE)
         continue;
+
+      //  if (p->flag_frozen){
+      //   uint cont_mask = (1 << SIGCONT);
+      //   if ((p->pending_signals & cont_mask) != 0){
+      //     sigcont();
+      //     p->pending_signals = (p->pending_signals) & ~(cont_mask);
+      //   }
+      //   else{
+      //     continue;
+      //   }
+
+      if (p->flag_frozen && !has_cont_pending(p)){
+        continue;
+      }
+
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
