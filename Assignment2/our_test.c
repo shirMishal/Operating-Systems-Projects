@@ -4,7 +4,7 @@
 #include "user.h"
 
 void action_handler(int signum){
-    printf(1, "SIGNAL %d HANDLED", signum);
+    printf(1, "SIGNAL %d HANDLED\n", signum);
 }
 
 int main(int argc, char** argv){
@@ -18,14 +18,17 @@ int main(int argc, char** argv){
     }
     else{
         sleep(1000);
-        printf(1, "sending signal %d to child", 1);
+        printf(1, "sending signal %d to child\n", 1);
         kill(pid, 1);
         sleep(100);
-        printf(1, "sending signal %d to child", 2);
+        printf(1, "sending signal %d to child\n", 2);
         kill(pid, 2);
         sleep(100);
-        printf(1, "sending signal %d to child", 3);
+        printf(1, "sending signal %d to child\n", 3);
         kill(pid, 3);
+
+        // sleep(10000);
+        // kill(pid, 9);
         exit();
     }
 }   

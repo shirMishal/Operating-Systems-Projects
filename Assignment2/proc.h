@@ -51,6 +51,7 @@ struct proc {
   char name[16];               // Process name (debugging)
   
   int flag_frozen;
+  int flag_in_user_handler;
   uint pending_signals;        // Represents the received signals
   uint blocked_signal_mask;            // Mask for blocked signals
   uint mask_backup;                    // Backup for mask while process is running

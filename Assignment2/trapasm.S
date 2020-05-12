@@ -25,6 +25,7 @@ alltraps:
 trapret:
 
   call handle_signals
+  
   popal
   popl %gs
   popl %fs

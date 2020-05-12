@@ -7,6 +7,8 @@
 #include "proc.h"
 #include "spinlock.h"
 
+
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -148,6 +150,7 @@ found:
   }
 
   p->flag_frozen = 0;
+  p->flag_in_user_handler = 0;
   return p;
 }
 
@@ -645,8 +648,13 @@ int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 
 void sigret(){
   struct proc* p = myproc();
-  *(p->tf) = *(p->user_trapframe_backup);
-  p->blocked_signal_mask = p->mask_backup;
+  if (p!= null){
+    //*(p->tf) = *(p->user_trapframe_backup);
+    memmove( p->tf, p->user_trapframe_backup, sizeof(struct trapframe));
+    p->blocked_signal_mask = p->mask_backup;
+    p->flag_in_user_handler = 0;
+    cprintf( "sigret debugg\n");
+  }
   return;
  }
 
@@ -677,11 +685,13 @@ void dummy(){
 }
 
 void handle_signals(){
+   //cprintf("in handle_signals\n");
   struct proc* p = myproc();
-  if (p == null){
+  if (p == null ){
     return;
   }
   dummy();
+ 
   uint mask = p->blocked_signal_mask;
   uint pending = p->pending_signals;
   uint signals_to_handle = (~mask) & pending;
@@ -689,6 +699,7 @@ void handle_signals(){
     if (((signals_to_handle >> signum) & 0x1) == 0){
         continue;
     }
+    cprintf("in handle_signals loop, iter:  %d\n",signum);
     // turning off the bit in pending signals
     p->pending_signals ^= 1 << signum;
 
@@ -718,21 +729,28 @@ void handle_signals(){
         }
         break;
       default:
-        // user signal handler
-        p->mask_backup = p->blocked_signal_mask;
-        p->blocked_signal_mask = p->signal_handlers[signum].sigmask;
-        *(p->user_trapframe_backup) = *(p->tf);
-        char call_sigret[7] = { 0xB8, 0x18, 0x00, 0x00, 0x00, 0xCD, 0x40 };
-        // 7 bytes for the compiled code calling to sigret (mov eax, 0x18 ; int 0x40)
-        // 4 bytes for signum param and 4 bytes for the return address
-        p->tf->esp -= 0xF;
-        *((int*)(p->tf->esp)) = p->tf->esp + 0x8;
-        *((int*)(p->tf->esp + 4)) = signum;
-        for (int i = 0; i < 7; i++){
-          *((char *)(p->tf->esp + i)) = call_sigret[i];
+        if ( p->flag_in_user_handler == 0){ 
+          //cprintf("in user_handle_signals\n");
+          // user signal handler
+          p->flag_in_user_handler = 1;
+          p->mask_backup = p->blocked_signal_mask;
+          p->blocked_signal_mask = p->signal_handlers[signum].sigmask;
+          memmove(p->user_trapframe_backup, p->tf,  sizeof(struct trapframe));
+          //*(p->user_trapframe_backup) = *(p->tf);
+          char call_sigret[7] = { 0xB8, 0x18, 0x00, 0x00, 0x00, 0xCD, 0x40 };
+          // 7 bytes for the compiled code calling to sigret (mov eax, 0x18 ; int 0x40)
+          // 4 bytes for signum param and 4 bytes for the return address
+          p->tf->esp -= 0xF;
+          *((int*)(p->tf->esp)) = p->tf->esp + 0x8;
+          *((int*)(p->tf->esp + 4)) = signum;
+          for (int i = 0; i < 7; i++){
+            *((char *)(p->tf->esp + 8 + i)) = call_sigret[i];
+          }
+          p->tf->eip = sa_handler;
+          return;
         }
-        p->tf->eip = sa_handler;
-        return;
-    }
+    } 
+    
   }
+  return;
 }
