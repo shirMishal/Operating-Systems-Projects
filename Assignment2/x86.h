@@ -181,3 +181,13 @@ struct trapframe {
   ushort ss;
   ushort padding6;
 };
+
+// check TODO
+static inline int cas(volatile void* addr, int expected, int newval){
+  asm volatile("cmpxchg %0, %2;\n\t"
+  "pushfl"
+  "mov $0x0040, %eax"
+  "and (%esp), %eax"
+  :"+r" (*addr), "+a" (expected)
+  :"r" (newval));
+}

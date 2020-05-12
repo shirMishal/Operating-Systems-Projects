@@ -119,11 +119,16 @@ found:
     p->state = UNUSED;
     return 0;
   }
+
+
   sp = p->kstack + KSTACKSIZE;
 
+  // sp -= sizeof(*p->user_trapframe_backup);
+  // p->user_trapframe_backup = (struct trapframe*)sp;
+
+  p->user_trapframe_backup = (struct trapframe*)kalloc();
+
   // reserving space for the trapframe backup. TODO: verify
-  sp -= sizeof(struct trapframe);
-  p->user_trapframe_backup = (struct trapframe*)sp;
 
   // Leave room for trap frame.
   sp -= sizeof *p->tf;
@@ -573,7 +578,6 @@ kill(int pid, int signum)
         p->state = RUNNABLE;
       }
       p->pending_signals = p->pending_signals | (1 << signum);
-      // Verify that we dont want to wake the process
       release(&ptable.lock);
       return 0;
     }
@@ -650,10 +654,10 @@ void sigret(){
   struct proc* p = myproc();
   if (p!= null){
     //*(p->tf) = *(p->user_trapframe_backup);
-    memmove( p->tf, p->user_trapframe_backup, sizeof(struct trapframe));
+    memmove( p->tf, p->user_trapframe_backup, sizeof(*p->user_trapframe_backup));
     p->blocked_signal_mask = p->mask_backup;
     p->flag_in_user_handler = 0;
-    cprintf( "sigret debugg\n");
+    cprintf("sigret debugg\n");
   }
   return;
  }
@@ -662,7 +666,10 @@ void sigret(){
 // Assumed that the signal is being clear from the pending signals by the caller
 int
 sigkill(){
+  acquire(&ptable.lock);
+  cprintf("process with pid %d killed handled\n", myproc()->pid);
   myproc()->killed = 1;
+  release(&ptable.lock);
   return 0;
 }
 
@@ -678,11 +685,6 @@ sigstop(){
   return 0;
 }
 
-void dummy(){
-  int x = 1;
-  x++;
-  return;
-}
 
 void handle_signals(){
    //cprintf("in handle_signals\n");
@@ -690,7 +692,6 @@ void handle_signals(){
   if (p == null ){
     return;
   }
-  dummy();
  
   uint mask = p->blocked_signal_mask;
   uint pending = p->pending_signals;
@@ -729,13 +730,13 @@ void handle_signals(){
         }
         break;
       default:
-        if ( p->flag_in_user_handler == 0){ 
+        if (p->flag_in_user_handler == 0){ 
           //cprintf("in user_handle_signals\n");
           // user signal handler
           p->flag_in_user_handler = 1;
           p->mask_backup = p->blocked_signal_mask;
           p->blocked_signal_mask = p->signal_handlers[signum].sigmask;
-          memmove(p->user_trapframe_backup, p->tf,  sizeof(struct trapframe));
+          memmove(p->user_trapframe_backup, p->tf, sizeof(*p->tf));
           //*(p->user_trapframe_backup) = *(p->tf);
           char call_sigret[7] = { 0xB8, 0x18, 0x00, 0x00, 0x00, 0xCD, 0x40 };
           // 7 bytes for the compiled code calling to sigret (mov eax, 0x18 ; int 0x40)
@@ -743,9 +744,10 @@ void handle_signals(){
           p->tf->esp -= 0xF;
           *((int*)(p->tf->esp)) = p->tf->esp + 0x8;
           *((int*)(p->tf->esp + 4)) = signum;
-          for (int i = 0; i < 7; i++){
-            *((char *)(p->tf->esp + 8 + i)) = call_sigret[i];
-          }
+          memmove((void*)(p->tf->esp + 8), call_sigret, 7);
+          // for (int i = 0; i < 7; i++){
+          //   *((char *)(p->tf->esp + 8 + i)) = call_sigret[i];
+          // }
           p->tf->eip = sa_handler;
           return;
         }
