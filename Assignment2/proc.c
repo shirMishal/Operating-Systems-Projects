@@ -81,11 +81,13 @@ myproc(void) {
 int 
 allocpid(void) 
 {
-  int pid;
-  acquire(&ptable.lock);
-  pid = nextpid++;
-  release(&ptable.lock);
-  return pid;
+  pushcli();
+  int oldval;
+  do{
+    oldval = nextpid;
+  } while(!cas(&nextpid, oldval, nextpid + 1));
+  return nextpid;
+  popcli();
 }
 
 //PAGEBREAK: 32
@@ -99,19 +101,19 @@ allocproc(void)
   struct proc *p;
   char *sp;
 
-  acquire(&ptable.lock);
-
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == UNUSED)
-      goto found;
-
-  release(&ptable.lock);
+  pushcli();
+  p = ptable.proc;
+  while (p < &ptable.proc[NPROC] && !cas(&(p->state), UNUSED, EMBRYO)){
+    p++;
+  }
+  if (p < &ptable.proc[NPROC]){
+    goto found;
+  }
+  popcli();
   return 0;
 
 found:
-  p->state = EMBRYO;
-  release(&ptable.lock);
-
+  popcli();
   p->pid = allocpid();
 
   // Allocate kernel stack.
@@ -193,11 +195,10 @@ userinit(void)
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
-  acquire(&ptable.lock);
-
-  p->state = RUNNABLE;
-
-  release(&ptable.lock);
+  // possible bug
+  pushcli();
+  cas(&(p->state), EMBRYO, RUNNABLE);
+  popcli();
 }
 
 // Grow current process's memory by n bytes.
@@ -259,11 +260,10 @@ fork(void)
 
   pid = np->pid;
 
-  acquire(&ptable.lock);
-
-  np->state = RUNNABLE;
-
-  release(&ptable.lock);
+  // possible bug
+  pushcli();
+  cas(&(np->state), EMBRYO, RUNNABLE);
+  popcli();
 
   // Inheriting parent's signal mask and handlers
 
@@ -653,11 +653,11 @@ int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 void sigret(){
   struct proc* p = myproc();
   if (p!= null){
-    //*(p->tf) = *(p->user_trapframe_backup);
-    memmove( p->tf, p->user_trapframe_backup, sizeof(*p->user_trapframe_backup));
+    *(p->tf) = *(p->user_trapframe_backup);
+    //memmove( p->tf, p->user_trapframe_backup, sizeof(*p->user_trapframe_backup));
     p->blocked_signal_mask = p->mask_backup;
     p->flag_in_user_handler = 0;
-    cprintf("sigret debugg\n");
+    // cprintf("sigret debug\n");
   }
   return;
  }
@@ -666,10 +666,10 @@ void sigret(){
 // Assumed that the signal is being clear from the pending signals by the caller
 int
 sigkill(){
-  acquire(&ptable.lock);
-  cprintf("process with pid %d killed handled\n", myproc()->pid);
+  // acquire(&ptable.lock);
+  // cprintf("process with pid %d killed handled\n", myproc()->pid);
   myproc()->killed = 1;
-  release(&ptable.lock);
+  // release(&ptable.lock);
   return 0;
 }
 
@@ -687,9 +687,9 @@ sigstop(){
 
 
 void handle_signals(){
-   //cprintf("in handle_signals\n");
+  //cprintf("in handle_signals\n");
   struct proc* p = myproc();
-  if (p == null ){
+  if (p == null){
     return;
   }
  
@@ -700,9 +700,8 @@ void handle_signals(){
     if (((signals_to_handle >> signum) & 0x1) == 0){
         continue;
     }
-    cprintf("in handle_signals loop, iter:  %d\n",signum);
     // turning off the bit in pending signals
-    p->pending_signals ^= 1 << signum;
+    p->pending_signals &= ~(1 << signum);
 
     // handle if kernel handler
     int sa_handler = (int)p->signal_handlers[signum].sa_handler;
@@ -736,8 +735,8 @@ void handle_signals(){
           p->flag_in_user_handler = 1;
           p->mask_backup = p->blocked_signal_mask;
           p->blocked_signal_mask = p->signal_handlers[signum].sigmask;
-          memmove(p->user_trapframe_backup, p->tf, sizeof(*p->tf));
-          //*(p->user_trapframe_backup) = *(p->tf);
+          //memmove(p->user_trapframe_backup, p->tf, sizeof(*p->tf));
+          *(p->user_trapframe_backup) = *(p->tf);
           char call_sigret[7] = { 0xB8, 0x18, 0x00, 0x00, 0x00, 0xCD, 0x40 };
           // 7 bytes for the compiled code calling to sigret (mov eax, 0x18 ; int 0x40)
           // 4 bytes for signum param and 4 bytes for the return address
@@ -748,7 +747,7 @@ void handle_signals(){
           // for (int i = 0; i < 7; i++){
           //   *((char *)(p->tf->esp + 8 + i)) = call_sigret[i];
           // }
-          p->tf->eip = sa_handler;
+          p->tf->eip = sa_handler + 4;
           return;
         }
     } 
