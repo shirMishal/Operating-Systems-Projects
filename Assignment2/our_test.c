@@ -90,9 +90,11 @@ int main(int argc, char** argv){
             printf(1, "%d\n", pid);
         }
         else{
+            wait();
             break;
         }
     }
+    wait();
     exit();
 }
 
