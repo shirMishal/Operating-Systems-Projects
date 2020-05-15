@@ -292,6 +292,7 @@ fork(void)
 void
 exit(void)
 {
+  
   struct proc *curproc = myproc();
   struct proc *p;
   int fd;
@@ -315,8 +316,13 @@ exit(void)
   // acquire(&ptable.lock);
   pushcli();
 
-  // Parent might be sleeping in wait().
-  wakeup1(curproc->parent);
+
+    // Jump into the scheduler, never to return.
+  if (!cas(&(curproc->state), RUNNING, -ZOMBIE)){
+    cprintf("exit is not at running state, real state is %d", curproc->state);
+    panic("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
+  }
+
 
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -327,12 +333,9 @@ exit(void)
     }
   }
 
-  // Jump into the scheduler, never to return.
-  if (!cas(&(curproc->state), RUNNING, -ZOMBIE)){
-    cprintf("exit is not at running state, real state is %d", curproc->state);
-    panic("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
-  }
-  ///
+  // Parent might be sleeping in wait().
+  wakeup1(curproc->parent);
+
   sched();
   panic("zombie exit");
 }
@@ -350,6 +353,10 @@ wait(void)
   pushcli();
 
   for(;;){
+    if (!cas(&(curproc->state), RUNNING, -SLEEPING) && !cas(&(curproc->state), -SLEEPING, -SLEEPING)){
+      cprintf("cant change state in wait. real state = %d\n", curproc->state);
+      panic("^^");
+    }
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -369,6 +376,9 @@ wait(void)
         p->killed = 0;
         switch_state(&(p->state), -UNUSED, UNUSED);
         // release(&ptable.lock);
+        if (!cas(&(curproc->state), -SLEEPING, RUNNING)){
+          panic("unable to return to running state in wait\n");
+        }
         popcli();
         return pid;
       }
@@ -377,12 +387,21 @@ wait(void)
     // No point waiting if we don't have any children.
     if(!havekids || curproc->killed){
       // release(&ptable.lock);
+      if (!cas(&(curproc->state), -SLEEPING, RUNNING)){
+          panic("unable to return to running state in wait\n");
+      }
       popcli();
       return -1;
     }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    sleep(curproc, null);  //DOC: wait-sleep
+    // sleep(curproc, null);  //DOC: wait-sleep
+    curproc->chan = curproc;
+
+    sched();
+
+    // Tidy up.
+    curproc->chan = 0;
   }
 }
 
@@ -453,7 +472,7 @@ scheduler(void)
       if (cas(&(p->state), -RUNNABLE, RUNNABLE) || cas(&(p->state), -SLEEPING, SLEEPING) || cas(&(p->state), -ZOMBIE, ZOMBIE)){
         continue;
       } else{
-        cprintf("process returned to scheduler in not (- sleeping) or (- runnable) or (- zombie) state. real state = %d\n", p->state);
+        cprintf("process returned to scheduler in not (- sleeping) or (- runnable) or (- zombie) state. real state = %d pid = %d\n", p->state, p->pid);
         panic("^^^^^^^^^^^^^^^^^^^^^^");
       }
     }
@@ -550,7 +569,10 @@ sleep(void *chan, struct spinlock *lk)
   // possible bug - assumed that process' state is RUNNING
   // Go to sleep.
   p->chan = chan;
-  switch_state(&(p->state), RUNNING, -SLEEPING);
+  if (!cas(&(p->state), RUNNING, -SLEEPING)){
+    cprintf("real state = %d\n", p->state);
+    panic("sleep change state failed");
+  }
 
   sched();
 
