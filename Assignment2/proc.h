@@ -57,6 +57,8 @@ struct proc {
   uint mask_backup;                    // Backup for mask while process is running
   struct sigaction signal_handlers[32];   // Array of pointers to handlers OR default values
   struct trapframe* user_trapframe_backup; // Trapframe backup for returning from kernel space
+
+  int debug;
 };
 
 // Process memory is laid out contiguously, low addresses first:

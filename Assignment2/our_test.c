@@ -8,6 +8,10 @@ void action_handler(int signum){
     return;
 }
 
+int main8(int argc, char** argv){
+  while(1){}
+}
+
 int main4(int argc, char** argv){
       int a, b, c,ret;
   a = 1; b = 2; c = 3;
@@ -87,14 +91,13 @@ int main(int argc, char** argv){
     for (int i = 0; i < 20; i++){
         int pid = fork();
         if (pid != 0){
-            printf(1, "%d\n", pid);
+            wait();
         }
         else{
-            wait();
+            printf(1, "%d\n", getpid());
             break;
         }
     }
-    wait();
     exit();
 }
 
