@@ -32,7 +32,7 @@ struct context {
   uint eip;
 };
 
-enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE, MINUS_UNUSED, MINUS_EMBRYO, MINUS_SLEEPING, MINUS_RUNNABLE, MINUS_RUNNING, MINUS_ZOMBIE };
 
 // Per-process state
 struct proc {
