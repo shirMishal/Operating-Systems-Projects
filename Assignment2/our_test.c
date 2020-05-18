@@ -8,11 +8,12 @@ void action_handler(int signum){
     return;
 }
 
-int main(int argc, char** argv){
+int main11(int argc, char** argv){
   for (int i = 0; i < 100; i++){
     printf(1, "sleeping for %d\n", i);
     sleep(i);
   }
+  return 0;
 }
 
 int main20(int argc, char** argv){
@@ -90,7 +91,7 @@ int main20(int argc, char** argv){
   exit();
 }
 
-int main10(int argc, char** argv){
+int main(int argc, char** argv){
     for (int i = 0; i < 20; i++){
         int pid = fork();
         if (pid != 0){

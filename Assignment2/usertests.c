@@ -1570,8 +1570,9 @@ validatetest(void)
   printf(stdout, "validate test\n");
   hi = 1100*1024;
 
-  for(p = 0; p <= (uint)hi; p += 4096){
+  for(p = 0; p <= (uint)hi; p += 4096){ 
     if((pid = fork()) == 0){
+      // printf(1, "now trying with p = %d\n", (int)p);
       // try to crash the kernel by passing in a badly placed integer
       validateint((int*)p);
       exit();
@@ -1750,12 +1751,12 @@ rand()
 int
 main(int argc, char *argv[])
 {
-  printf(1, "usertests starting\n");
+  printf(1, "usertests starting!!!\n");
 
-  if(open("usertests.ran", 0) >= 0){
-    printf(1, "already ran user tests -- rebuild fs.img\n");
-    exit();
-  }
+  // if(open("usertests.ran", 0) >= 0){
+  //   printf(1, "already ran user tests -- rebuild fs.img\n");
+  //   exit();
+  // }
   close(open("usertests.ran", O_CREATE));
 
   argptest();
@@ -1771,7 +1772,6 @@ main(int argc, char *argv[])
   bsstest();
   sbrktest();
   validatetest();
-
   opentest();
   writetest();
   writetest1();
