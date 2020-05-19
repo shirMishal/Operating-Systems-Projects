@@ -1450,7 +1450,7 @@ sbrktest(void)
     exit();
   wait();
 
-  // can one grow address space to something big?
+// can one grow address space to something big?
 #define BIG (100*1024*1024)
   a = sbrk(0);
   amt = (BIG) - (uint)a;
@@ -1751,12 +1751,12 @@ rand()
 int
 main(int argc, char *argv[])
 {
-  printf(1, "usertests starting!!!\n");
+  printf(1, "usertests starting\n");
 
-  // if(open("usertests.ran", 0) >= 0){
-  //   printf(1, "already ran user tests -- rebuild fs.img\n");
-  //   exit();
-  // }
+  if(open("usertests.ran", 0) >= 0){
+    printf(1, "already ran user tests -- rebuild fs.img\n");
+    exit();
+  }
   close(open("usertests.ran", O_CREATE));
 
   argptest();

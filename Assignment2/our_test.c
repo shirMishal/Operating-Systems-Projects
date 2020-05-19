@@ -16,7 +16,7 @@ int main11(int argc, char** argv){
   return 0;
 }
 
-int main20(int argc, char** argv){
+int main43(int argc, char** argv){
       int a, b, c,ret;
   a = 1; b = 2; c = 3;
   int i=1;
@@ -91,7 +91,7 @@ int main20(int argc, char** argv){
   exit();
 }
 
-int main(int argc, char** argv){
+int main54(int argc, char** argv){
     for (int i = 0; i < 20; i++){
         int pid = fork();
         if (pid != 0){
@@ -105,7 +105,7 @@ int main(int argc, char** argv){
     exit();
 }
 
-int main1(int argc, char** argv){
+int main1122(int argc, char** argv){
     struct sigaction sigact = {action_handler, 0};
     sigaction(1, &sigact, null);
     kill(getpid(), 1);
@@ -120,11 +120,11 @@ int main1(int argc, char** argv){
     return 0;
 }
 
-int main2(int argc, char** argv){
+int main(int argc, char** argv){
     struct sigaction sigact = {action_handler, 0};
     int pid = fork();
     if (pid == 0){
-        printf(1, "childs here");
+        printf(1, "childs here\n");
         sigaction(1, &sigact, null);
         sigaction(2, &sigact, null);
         sigaction(3, &sigact, null);
@@ -151,8 +151,6 @@ int main2(int argc, char** argv){
 
         wait();
         sleep(300);
-
-
     }
     exit();
 }   

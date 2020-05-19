@@ -62,6 +62,7 @@ struct proc {
   struct trapframe* user_trapframe_backup; // Trapframe backup for returning from kernel space
 
   int debug;
+  int waiting;
 };
 
 // Process memory is laid out contiguously, low addresses first:
