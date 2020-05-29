@@ -22,7 +22,24 @@ void test_cfs();
 void test_cfs_fork();
 
 
-int main(int argc, char *argv[])
+int main(int argc, char *argv[]){
+	int pid = fork();
+	if (pid == 0){
+		while(1){}
+	}
+	else {
+		sleep(100);
+		kill(pid);
+		sleep(500);
+		exit(1);
+	}
+}
+
+
+
+
+
+int main1(int argc, char *argv[])
 {   
     /*** system calls tests ***/
     run_test(1);
