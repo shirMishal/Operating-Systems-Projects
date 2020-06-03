@@ -11,9 +11,6 @@
 
 #define CR4_PSE         0x00000010      // Page size extension
 
-#define PTE_PG          0x200   // paged out to secondary source
-#define PTE_A           0x020  // Page Accesed or not
-
 #define MAX_PYSC_PAGES 16
 #define MAX_TOTAL_PAGES 32
 
@@ -101,10 +98,14 @@ struct segdesc {
 #define PTE_W           0x002   // Writeable
 #define PTE_U           0x004   // User
 #define PTE_PS          0x080   // Page Size
+#define PTE_PG          0x200   // paged out to secondary source
+#define PTE_A           0x020   // Page Accesed or not
 
 // Address in page table or page directory entry
 #define PTE_ADDR(pte)   ((uint)(pte) & ~0xFFF)
 #define PTE_FLAGS(pte)  ((uint)(pte) &  0xFFF)
+
+#define VA_OFFSET(va)  ((uint)(va) & 0xFFF)
 
 #ifndef __ASSEMBLER__
 typedef uint pte_t;
@@ -185,3 +186,4 @@ struct gatedesc {
 }
 
 #endif
+

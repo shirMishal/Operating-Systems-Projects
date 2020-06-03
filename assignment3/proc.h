@@ -60,7 +60,7 @@ struct proc {
   //Swap file. must initiate with create swap file
   struct file *swapFile;      //page file
 
-
+  // INV  : cell swapped_out_pages[i] is free iff there isnt a page that is written in offset i * PGSIZE in the swap file
   struct pageinfo swapped_out_pages[MAX_TOTAL_PAGES-MAX_PYSC_PAGES];
   struct pageinfo ram_pages[MAX_PYSC_PAGES];
 

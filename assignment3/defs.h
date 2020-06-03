@@ -9,6 +9,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct pageinfo;
 
 // bio.c
 void            binit(void);
@@ -198,3 +199,9 @@ void            clearpteu(pde_t *pgdir, char *uva);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+
+// swaps
+uint* public_walkpgdir(pde_t *pgdir, const void *va, int alloc);
+void swap_page_back(struct proc* p, struct pageinfo* pi_to_swapin);
+

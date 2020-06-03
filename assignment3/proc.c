@@ -112,16 +112,19 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
-  p->num_of_actual_pages_in_mem = 0;
-  p->num_of_pagefaults_occurs = 0;
-  p->num_of_pageOut_occured = 0;
-  p->num_of_pages_in_swap_file = 0;
+ if (p->pid > 2){
+    p->num_of_actual_pages_in_mem = 0;
+    p->num_of_pagefaults_occurs = 0;
+    p->num_of_pageOut_occured = 0;
+    p->num_of_pages_in_swap_file = 0;
 
-  p->swapFile = createSwapFile(p);
+    createSwapFile(p);
+    // possible bug
 
-  for (int i = 0; i < 16; i++){
-    p->ram_pages[i].is_free = p->swapped_out_pages[i].is_free = 1;
+    for (int i = 0; i < 16; i++){
+      p->ram_pages[i].is_free = p->swapped_out_pages[i].is_free = 1;
   }
+ }
   return p;
 }
 
@@ -222,6 +225,22 @@ fork(void)
 
   pid = np->pid;
 
+  if (curproc->pid > 2 && np->pid > 2){
+    int last_not_free_in_file = MAX_PYSC_PAGES - 1;
+    while (curproc->swapped_out_pages[last_not_free_in_file].is_free){ last_not_free_in_file--; }
+    void* pg_buffer = kalloc();
+    for (int i = 0; i <= last_not_free_in_file * PGSIZE; i+=PGSIZE){
+      readFromSwapFile(curproc, pg_buffer, i, PGSIZE);
+      writeToSwapFile(np, pg_buffer, i, PGSIZE);
+    }
+    kfree(pg_buffer);
+
+    for (int i = 0; i < MAX_PYSC_PAGES; i++){
+      np->ram_pages[i] = curproc->ram_pages[i];
+      np->swapped_out_pages[i] = curproc->swapped_out_pages[i];
+    }
+  }
+
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
@@ -256,6 +275,8 @@ exit(void)
   iput(curproc->cwd);
   end_op();
   curproc->cwd = 0;
+
+  removeSwapFile(curproc);
 
   acquire(&ptable.lock);
 
@@ -296,6 +317,19 @@ wait(void)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
+        if (p->pid > 2){
+          p->num_of_pagefaults_occurs = 0;
+          p->num_of_actual_pages_in_mem = 0;
+          p->num_of_pageOut_occured = 0;
+          p->num_of_pages_in_swap_file = 0;
+          for (int i = 0; i < MAX_PYSC_PAGES; i++){
+            p->ram_pages[i].is_free = p->swapped_out_pages[i].is_free = 1;
+            p->ram_pages[i].aging_counter = p->swapped_out_pages[i].aging_counter = 0;
+            p->ram_pages[i].swap_file_offset = p->swapped_out_pages[i].swap_file_offset = 0;
+            p->ram_pages[i].va = p->swapped_out_pages[i].va = 0;
+          }
+        }
+
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
@@ -305,6 +339,8 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+
+
         release(&ptable.lock);
         return pid;
       }

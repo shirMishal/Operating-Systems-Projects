@@ -78,6 +78,25 @@ trap(struct trapframe *tf)
     lapiceoi();
     break;
 
+  case T_PGFLT:
+  ;
+    cprintf("pgfault");
+    uint faulting_addr = rcr2();
+    struct proc* p = myproc();
+    // p->tf->eip
+    pte_t* pte_ptr = public_walkpgdir(p->pgdir, (void *)faulting_addr, 0);
+    if (!(pte_ptr == 0) && (*pte_ptr & PTE_U) && (*pte_ptr & PTE_PG)){
+      // this is a swapped out page, we need to get it back
+      for (int i = 0; i < MAX_PYSC_PAGES; i++){
+        if ((uint)(p->swapped_out_pages[i].va) == PGROUNDDOWN(faulting_addr)){
+          swap_page_back(p, &(p->swapped_out_pages[i]));
+          break;
+        }
+      }
+      p->num_of_pagefaults_occurs++;
+      break;
+    }
+
   //PAGEBREAK: 13
   default:
     if(myproc() == 0 || (tf->cs&3) == 0){
