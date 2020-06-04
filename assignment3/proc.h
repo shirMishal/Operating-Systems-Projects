@@ -38,6 +38,7 @@ struct pageinfo {
   uint aging_counter;
   uint page_index;  // usefull for SCFIFO, is the global index of the page
   void* va;         // virtual address of the page (offset will be ignore because we are not intersted in the physical memory)
+  pde_t* pgdir_of_va;
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };

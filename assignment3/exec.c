@@ -7,6 +7,20 @@
 #include "x86.h"
 #include "elf.h"
 
+void intiate_pg_info(struct proc* p){
+  p->num_of_pageOut_occured = 0;
+  p->num_of_pagefaults_occurs = 0;
+  p->num_of_actual_pages_in_mem = 0;
+  p->num_of_pages_in_swap_file = 0;
+  for (int i = 0; i < MAX_PYSC_PAGES; i++){
+    p->ram_pages[i].is_free = p->swapped_out_pages[i].is_free = 1;
+    p->ram_pages[i].aging_counter = p->swapped_out_pages[i].aging_counter = 0;
+    p->ram_pages[i].swap_file_offset = p->swapped_out_pages[i].swap_file_offset = 0;
+    p->ram_pages[i].va = p->swapped_out_pages[i].va = 0;
+  }
+}
+
+
 int
 exec(char *path, char **argv)
 {
@@ -18,6 +32,11 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
+  uint pg_out_bu = 0, pg_flt_bu = 0, pg_mem_bu = 0, pg_swp_bu = 0;
+  struct pageinfo mem_pginfo_bu[MAX_PYSC_PAGES];
+  struct pageinfo swp_pginfo_bu[MAX_PYSC_PAGES];
+  struct file* swap_file_bu = 0;
+  struct file* temp_swap_file = 0;
 
   begin_op();
 
@@ -37,6 +56,23 @@ exec(char *path, char **argv)
 
   if((pgdir = setupkvm()) == 0)
     goto bad;
+
+  if (curproc->pid > 2){
+    // lets backup the pageinfo of the old process for case the exec fails
+    // ******************BACKUP****************************
+    pg_flt_bu = curproc->num_of_pagefaults_occurs;
+    pg_mem_bu = curproc->num_of_actual_pages_in_mem;
+    pg_swp_bu = curproc->num_of_pages_in_swap_file;
+    pg_out_bu = curproc->num_of_pageOut_occured;
+    for (int i = 0; i < MAX_PYSC_PAGES; i++){
+      mem_pginfo_bu[i] = curproc->ram_pages[i];
+      swp_pginfo_bu[i] = curproc->swapped_out_pages[i];
+    }
+    // ******************BACKUP****************************
+    intiate_pg_info(curproc);
+    swap_file_bu = curproc->swapFile;
+    createSwapFile(curproc);
+  }
 
   // Load program into memory.
   sz = 0;
@@ -99,13 +135,38 @@ exec(char *path, char **argv)
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+
+  if (curproc->pid > 2){
+    // ##### REMOVE OLD SWAP FILE ##################
+    temp_swap_file = curproc->swapFile;
+    curproc->swapFile = swap_file_bu;
+    removeSwapFile(curproc);
+    curproc->swapFile = temp_swap_file;
+    // ##### REMOVE OLD SWAP FILE ##################
+  }
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;
 
  bad:
-  if(pgdir)
+  if(pgdir){
+    if (curproc->pid > 2){
+      // lets restore the pageinfo of the old process
+      // ******************RESTORE****************************
+      curproc->num_of_pagefaults_occurs = pg_flt_bu;
+      curproc->num_of_actual_pages_in_mem = pg_mem_bu;
+      curproc->num_of_pages_in_swap_file = pg_swp_bu;
+      curproc->num_of_pageOut_occured = pg_out_bu;
+      for (int i = 0; i < MAX_PYSC_PAGES; i++){
+        curproc->ram_pages[i] = mem_pginfo_bu[i];
+        curproc->swapped_out_pages[i] = swp_pginfo_bu[i];
+      }
+      // ******************RESTORE****************************
+      removeSwapFile(curproc);
+      curproc->swapFile = swap_file_bu;
+    }
     freevm(pgdir);
+  }
   if(ip){
     iunlockput(ip);
     end_op();

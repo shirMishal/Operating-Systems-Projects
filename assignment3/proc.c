@@ -227,9 +227,11 @@ fork(void)
 
   if (curproc->pid > 2 && np->pid > 2){
     int last_not_free_in_file = MAX_PYSC_PAGES - 1;
-    while (curproc->swapped_out_pages[last_not_free_in_file].is_free){ last_not_free_in_file--; }
+    while (last_not_free_in_file >= 0 && curproc->swapped_out_pages[last_not_free_in_file].is_free){ last_not_free_in_file--; }
+    last_not_free_in_file++;
+    // cprintf("my magic number is %d\n", last_not_free_in_file);
     void* pg_buffer = kalloc();
-    for (int i = 0; i <= last_not_free_in_file * PGSIZE; i+=PGSIZE){
+    for (int i = 0; i < last_not_free_in_file * PGSIZE; i += PGSIZE){
       readFromSwapFile(curproc, pg_buffer, i, PGSIZE);
       writeToSwapFile(np, pg_buffer, i, PGSIZE);
     }
