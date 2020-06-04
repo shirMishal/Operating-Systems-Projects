@@ -80,7 +80,6 @@ trap(struct trapframe *tf)
 
   case T_PGFLT:
   ;
-    cprintf("pgfault");
     uint faulting_addr = rcr2();
     struct proc* p = myproc();
     // p->tf->eip
@@ -88,7 +87,8 @@ trap(struct trapframe *tf)
     if (!(pte_ptr == 0) && (*pte_ptr & PTE_U) && (*pte_ptr & PTE_PG)){
       // this is a swapped out page, we need to get it back
       for (int i = 0; i < MAX_PYSC_PAGES; i++){
-        if ((uint)(p->swapped_out_pages[i].va) == PGROUNDDOWN(faulting_addr)){
+        if (PGROUNDDOWN((uint)(p->swapped_out_pages[i].va)) == PGROUNDDOWN(faulting_addr)){
+          cprintf("\nPGFAULT pid = %d\n", p->pid);
           swap_page_back(p, &(p->swapped_out_pages[i]));
           break;
         }

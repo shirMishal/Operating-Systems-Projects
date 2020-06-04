@@ -297,6 +297,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     // our code
     // #if SELECTION != NONE
     if (p->pid > 2){
+      p->num_of_actual_pages_in_mem++;
       // uint number_of_pages_to_alloc = (PGROUNDUP(newsz) - a) / PGSIZE;
       // uint number_of_pages_to_swap = number_of_pages_to_alloc - (MAX_PYSC_PAGES - p->num_of_actual_pages_in_mem);
       if (p->num_of_actual_pages_in_mem >= 16){
@@ -321,13 +322,16 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       kfree(mem);
       return 0;
     }
-    for (int i = 0; i < MAX_PYSC_PAGES; i++){
-      if (p->ram_pages[i].is_free){
-        // alocating one pageinfo and saving the details
-        p->ram_pages[i].is_free = 0;
-        p->ram_pages[i].page_index = ++page_counter;
-        p->ram_pages[i].va = (void *)a;
-        break;
+    if (p->pid > 2){
+
+      for (int i = 0; i < MAX_PYSC_PAGES; i++){
+        if (p->ram_pages[i].is_free){
+          // alocating one pageinfo and saving the details
+          p->ram_pages[i].is_free = 0;
+          p->ram_pages[i].page_index = ++page_counter;
+          p->ram_pages[i].va = (void *)a;
+          break;
+        }
       }
     }
   }
@@ -359,18 +363,18 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
         panic("kfree");
       char *v = P2V(pa);
       kfree(v);
+      if (p->pid > 2 && pgdir == p->pgdir){
+        for (int i = 0; i < MAX_PYSC_PAGES; i++){
+          if (p->ram_pages[i].va == (void*)a){
+            p->num_of_actual_pages_in_mem--;
+            p->ram_pages[i].is_free = 1;
+            p->ram_pages[i].aging_counter = 0;
+            p->ram_pages[i].va = 0;
+            break;
+          }
+        }
+      }
       *pte = 0;
-    }
-  }
-
-  if (p->pid > 2 && p->pgdir == pgdir){
-    p->num_of_actual_pages_in_mem = 0;
-    p->num_of_pages_in_swap_file = 0;
-    for (int i = 0; i < MAX_PYSC_PAGES; i++){
-      p->ram_pages[i].is_free = p->swapped_out_pages[i].is_free = 1;
-      p->ram_pages[i].aging_counter = p->swapped_out_pages[i].aging_counter = 0;
-      p->ram_pages[i].swap_file_offset = p->swapped_out_pages[i].swap_file_offset = 0;
-      p->ram_pages[i].va = p->swapped_out_pages[i].va = 0;
     }
   }
 
@@ -383,10 +387,20 @@ void
 freevm(pde_t *pgdir)
 {
   uint i;
-
+  struct proc* p = myproc();
   if(pgdir == 0)
     panic("freevm: no pgdir");
   deallocuvm(pgdir, KERNBASE, 0);
+  if (p->pid > 2 && p->pgdir == pgdir){
+    p->num_of_actual_pages_in_mem = 0;
+    p->num_of_pages_in_swap_file = 0;
+    for (int i = 0; i < MAX_PYSC_PAGES; i++){
+      p->ram_pages[i].is_free = p->swapped_out_pages[i].is_free = 1;
+      p->ram_pages[i].aging_counter = p->swapped_out_pages[i].aging_counter = 0;
+      p->ram_pages[i].swap_file_offset = p->swapped_out_pages[i].swap_file_offset = 0;
+      p->ram_pages[i].va = p->swapped_out_pages[i].va = 0;
+    }
+  }
   for(i = 0; i < NPDENTRIES; i++){
     if(pgdir[i] & PTE_P){
       char * v = P2V(PTE_ADDR(pgdir[i]));
