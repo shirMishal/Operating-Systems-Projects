@@ -6,12 +6,17 @@
 #include "mmu.h"
 #include "proc.h"
 #include "elf.h"
+#include "spinlock.h"
+
 
 struct pageinfo* find_page_to_swap(struct proc* p);
 static pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc);
 int swap_in(struct proc* p, struct pageinfo* pi);
 void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t* pgdir);
+
+short pg_ref_counts[PHYSTOP/PGSIZE];
+struct spinlock cow_lock;
 
 // #if SELECTION == NONE
 // struct pageinfo* find_page_to_swap(struct proc* p){
@@ -426,11 +431,40 @@ void
 clearpteu(pde_t *pgdir, char *uva)
 {
   pte_t *pte;
-
   pte = walkpgdir(pgdir, uva, 0);
   if(pte == 0)
     panic("clearpteu");
   *pte &= ~PTE_U;
+}
+
+pde_t*
+cow_copyuvm(pde_t *pgdir, uint sz)
+{
+  pde_t *d;
+  pte_t *pte;
+  uint pa, i, flags;
+  acquire(&cow_lock);
+  if((d = setupkvm()) == 0)
+    return 0;
+  for(i = 0; i < sz; i += PGSIZE){
+    if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+      panic("copyuvm: pte should exist");
+    if(!(*pte & PTE_P) && !(*pte & PTE_PG))
+      panic("copyuvm: page not present");
+    pa = PTE_ADDR(*pte);
+    flags = PTE_FLAGS(*pte);
+    pg_ref_counts[PGROUNDDOWN(pa)/PGSIZE]++;
+    if(mappages(d, (void*)i, PGSIZE, pa, (flags & (~PTE_W)) | (PTE_W & flags ? PTE_COW : 0)) < 0) {
+      goto bad;
+    }
+  }
+  release(&cow_lock);
+  return d;
+
+bad:
+  freevm(d);
+  release(&cow_lock);
+  return 0;
 }
 
 // Given a parent process's page table, create a copy

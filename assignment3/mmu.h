@@ -100,6 +100,7 @@ struct segdesc {
 #define PTE_PS          0x080   // Page Size
 #define PTE_PG          0x200   // paged out to secondary source
 #define PTE_A           0x020   // Page Accesed or not
+#define PTE_COW         0x800   // Copy On Write bit
 
 // Address in page table or page directory entry
 #define PTE_ADDR(pte)   ((uint)(pte) & ~0xFFF)
