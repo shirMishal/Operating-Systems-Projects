@@ -21,9 +21,9 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
 
 // #if SELECTION == SCFIFO
 uint page_counter = 0;
-struct pageinfo* find_page_to_swap1(struct proc* p){
+struct pageinfo* find_page_to_swap(struct proc* p){
   while(1){
-    uint min = 0xFFFFFFFF;
+    uint min = 0x0FFFFFFF;
     struct pageinfo* min_pi = 0;
     for (int i = 0; i < MAX_PYSC_PAGES; i++){
       struct pageinfo* pi = &(p->ram_pages[i]); 
@@ -45,10 +45,9 @@ struct pageinfo* find_page_to_swap1(struct proc* p){
       return min_pi;
     }
   }
-
 }
 
-struct pageinfo* find_page_to_swap(struct proc* p){
+struct pageinfo* find_page_to_swap1(struct proc* p){
   for (int i = 0; i < MAX_PYSC_PAGES; i++){
     if (!p->ram_pages[i].is_free){
       return &p->ram_pages[i];
@@ -309,7 +308,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     // our code
     // #if SELECTION != NONE
     if (p->pid > 2){
-      p->num_of_actual_pages_in_mem++;
       // uint number_of_pages_to_alloc = (PGROUNDUP(newsz) - a) / PGSIZE;
       // uint number_of_pages_to_swap = number_of_pages_to_alloc - (MAX_PYSC_PAGES - p->num_of_actual_pages_in_mem);
       if (p->num_of_actual_pages_in_mem >= 16){
@@ -318,6 +316,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
         // INV  : cell swapped_out_pages[i] is free iff there isnt a page that is written in offset i * PGSIZE in the swap file
         swap_out(p, page_to_swap, 0, pgdir);
       }
+      p->num_of_actual_pages_in_mem++;
     }
     // now we are sure that we have enough free pages in ram (except maybe some race conditions)
     // #endif
@@ -512,6 +511,7 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 //  and use buffer to swap out from
 //  we assume that if buffer is not 0, it is kernel virtual address
 void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t* pgdir){
+  // cprintf("SWAP OUT: index = %d, offset = %d, va = %d\n", page_to_swap->page_index, page_to_swap->swap_file_offset, page_to_swap->va);
   if (buffer == 0){
     // page_to_swap->va
     buffer = P2V((PTE_ADDR(*(walkpgdir(pgdir, page_to_swap->va, 0)))));
@@ -519,13 +519,19 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
   // swap page
   // INV  : cell swapped_out_pages[i] is free iff there isnt a page that is written in offset i * PGSIZE in the swap file
   int index;
+  int found = 0;
+  p->num_of_pages_in_swap_file++;
   for (index = 0; index < MAX_PYSC_PAGES; index++){
     if (p->swapped_out_pages[index].is_free){
       p->swapped_out_pages[index].is_free = 0;
       p->swapped_out_pages[index].va = page_to_swap->va;
       p->swapped_out_pages[index].swap_file_offset = index * PGSIZE;
+      found = 1;
       break;
     }
+  }
+  if (!found){
+    panic("SWAP IN BALAGAN\n");
   }
   if (index < 0 || index > 15){
     panic("we have a bug\n");
@@ -538,7 +544,7 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
   pte_t* pte_ptr = walkpgdir(pgdir, page_to_swap->va, 0);
   *pte_ptr |= PTE_PG;
   *pte_ptr &= ~PTE_P;
-  *pte_ptr |= PTE_U;
+  // *pte_ptr |= PTE_U;
   kfree(buffer);
   // refresh cr3
   lcr3(V2P(p->pgdir));
@@ -546,7 +552,6 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
   if (result < 0){
     panic("swap out failed\n");
   }
-  p->num_of_pages_in_swap_file++;
   p->num_of_pageOut_occured++;
   p->num_of_actual_pages_in_mem--;
 }
@@ -555,12 +560,18 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
 int swap_in(struct proc* p, struct pageinfo* pi){
   pde_t* pgdir = p->pgdir;
   uint offset = pi->swap_file_offset;
+  int found = 0;
   int index;
+  // cprintf("SWAP IN: index = %d, offset = %d, va = %d\n", pi->page_index, pi->swap_file_offset, pi->va);
   for (index = 0; index < MAX_PYSC_PAGES; index++){
     if (p->ram_pages[index].is_free){
+      found = 1;
       p->ram_pages[index].is_free = 0;
       break;
     }
+  }
+  if (!found){
+    panic("SWAP IN BALAGAN\n");
   }
   void* mem = kalloc();
   // mem = kalloc();
@@ -622,6 +633,7 @@ void swap_page_back(struct proc* p, struct pageinfo* pi_to_swapin){
   // }
   // cprintf("RAM: %d SWAP: %d\n", ram, swap);
   if (p->num_of_actual_pages_in_mem == MAX_PYSC_PAGES && p->num_of_pages_in_swap_file == MAX_PYSC_PAGES){
+    // cprintf("PGFAULT A\n");
     // file and ram are full - we need temp buffer
     char* buffer = kalloc();
     struct pageinfo pi;
@@ -638,11 +650,13 @@ void swap_page_back(struct proc* p, struct pageinfo* pi_to_swapin){
     swap_out(p, &pi, buffer, p->pgdir);
   }
   else if (p->num_of_actual_pages_in_mem == MAX_PYSC_PAGES && p->num_of_pages_in_swap_file < MAX_PYSC_PAGES){
+    // cprintf("PGFAULT B\n");
     struct pageinfo* page_to_swap = find_page_to_swap(p);
     swap_out(p, page_to_swap, 0, p->pgdir);
     swap_in(p, pi_to_swapin);
   }
   else{
+    // cprintf("PGFAULT C\n");
     swap_in(p, pi_to_swapin);
   }
 }
