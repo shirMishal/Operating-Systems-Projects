@@ -21,18 +21,21 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
 
 // #if SELECTION == SCFIFO
 uint page_counter = 0;
-struct pageinfo* find_page_to_swap(struct proc* p){
+struct pageinfo* find_page_to_swap1(struct proc* p){
   while(1){
     uint min = 0xFFFFFFFF;
     struct pageinfo* min_pi = 0;
     for (int i = 0; i < MAX_PYSC_PAGES; i++){
       struct pageinfo* pi = &(p->ram_pages[i]); 
+      // if ((*(walkpgdir(p->pgdir, pi, 0)) & PTE_U) == 0){
+      //   continue;
+      // }
       if (!pi->is_free && pi->page_index < min){
           min = pi->page_index;
           min_pi = pi;
       }
     }
-    pte_t* pte = walkpgdir(p->pgdir, min_pi, 0);\
+    pte_t* pte = walkpgdir(p->pgdir, min_pi, 0);
     // giving the page a second chance
     if (*pte & PTE_A){
       min_pi->page_index = (++page_counter);
@@ -43,6 +46,15 @@ struct pageinfo* find_page_to_swap(struct proc* p){
     }
   }
 
+}
+
+struct pageinfo* find_page_to_swap(struct proc* p){
+  for (int i = 0; i < MAX_PYSC_PAGES; i++){
+    if (!p->ram_pages[i].is_free){
+      return &p->ram_pages[i];
+    }
+  }
+  return 0;
 }
 // #endif
 
@@ -323,7 +335,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       return 0;
     }
     if (p->pid > 2){
-
       for (int i = 0; i < MAX_PYSC_PAGES; i++){
         if (p->ram_pages[i].is_free){
           // alocating one pageinfo and saving the details
@@ -438,7 +449,7 @@ copyuvm(pde_t *pgdir, uint sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
+    if(!(*pte & PTE_P) && !(*pte & PTE_PG))
       panic("copyuvm: page not present");
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
@@ -512,8 +523,12 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
     if (p->swapped_out_pages[index].is_free){
       p->swapped_out_pages[index].is_free = 0;
       p->swapped_out_pages[index].va = page_to_swap->va;
+      p->swapped_out_pages[index].swap_file_offset = index * PGSIZE;
       break;
     }
+  }
+  if (index < 0 || index > 15){
+    panic("we have a bug\n");
   }
   int result = writeToSwapFile(p, buffer, index * PGSIZE, PGSIZE);
 
@@ -523,6 +538,7 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
   pte_t* pte_ptr = walkpgdir(pgdir, page_to_swap->va, 0);
   *pte_ptr |= PTE_PG;
   *pte_ptr &= ~PTE_P;
+  *pte_ptr |= PTE_U;
   kfree(buffer);
   // refresh cr3
   lcr3(V2P(p->pgdir));
@@ -547,7 +563,7 @@ int swap_in(struct proc* p, struct pageinfo* pi){
     }
   }
   void* mem = kalloc();
-  mem = kalloc();
+  // mem = kalloc();
   if(mem == 0){
     cprintf("swap in - out of memory\n");
     // deallocuvm(pgdir, newsz, oldsz);
@@ -558,7 +574,7 @@ int swap_in(struct proc* p, struct pageinfo* pi){
   pte_t* pte_ptr = walkpgdir(pgdir, va, 0);
   // update flags
   *pte_ptr &= ~PTE_PG;
-  *pte_ptr |= PTE_P;
+  *pte_ptr |= (PTE_P | PTE_U | PTE_W);
 
   // updating physical address written in the page table entry
   *pte_ptr = PTE_FLAGS(*pte_ptr);
@@ -594,6 +610,17 @@ int swap_in(struct proc* p, struct pageinfo* pi){
  * */
 
 void swap_page_back(struct proc* p, struct pageinfo* pi_to_swapin){
+  // cprintf("RAM: %d SWAP: %d\n", p->num_of_actual_pages_in_mem, p->num_of_pages_in_swap_file);
+  // int ram = 0, swap = 0;
+  // for (int i = 0; i < MAX_PYSC_PAGES; i++){
+  //   if (!p->ram_pages[i].is_free){
+  //     ram++;
+  //   }
+  //   if (!p->swapped_out_pages[i].is_free){
+  //     swap++;
+  //   }
+  // }
+  // cprintf("RAM: %d SWAP: %d\n", ram, swap);
   if (p->num_of_actual_pages_in_mem == MAX_PYSC_PAGES && p->num_of_pages_in_swap_file == MAX_PYSC_PAGES){
     // file and ram are full - we need temp buffer
     char* buffer = kalloc();

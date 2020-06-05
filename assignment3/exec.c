@@ -58,6 +58,7 @@ exec(char *path, char **argv)
     goto bad;
 
   if (curproc->pid > 2){
+    // cprintf("EXEC HERE\n");
     // lets backup the pageinfo of the old process for case the exec fails
     // ******************BACKUP****************************
     pg_flt_bu = curproc->num_of_pagefaults_occurs;

@@ -168,107 +168,107 @@ main1(int argc, char *argv[])
 {
  12b:	83 ec 60             	sub    $0x60,%esp
  12e:	66 90                	xchg   %ax,%ax
+        printf(1, "%d\n", i);
+ 130:	83 ec 04             	sub    $0x4,%esp
+ 133:	53                   	push   %ebx
+ 134:	68 c2 09 00 00       	push   $0x9c2
+ 139:	6a 01                	push   $0x1
+ 13b:	e8 80 04 00 00       	call   5c0 <printf>
         pointers[i] = (uint)sbrk(4096);
- 130:	83 ec 0c             	sub    $0xc,%esp
- 133:	68 00 10 00 00       	push   $0x1000
- 138:	e8 ae 03 00 00       	call   4eb <sbrk>
+ 140:	c7 04 24 00 10 00 00 	movl   $0x1000,(%esp)
+ 147:	e8 9f 03 00 00       	call   4eb <sbrk>
         * (char *) pointers[i] = (char) ('a' + i);
- 13d:	8d 53 61             	lea    0x61(%ebx),%edx
+ 14c:	8d 53 61             	lea    0x61(%ebx),%edx
     for (i = 0 ; i < c ; i++){
- 140:	83 c4 10             	add    $0x10,%esp
+ 14f:	83 c4 10             	add    $0x10,%esp
         pointers[i] = (uint)sbrk(4096);
- 143:	89 44 9d a4          	mov    %eax,-0x5c(%ebp,%ebx,4)
+ 152:	89 44 9d a4          	mov    %eax,-0x5c(%ebp,%ebx,4)
     for (i = 0 ; i < c ; i++){
- 147:	83 c3 01             	add    $0x1,%ebx
+ 156:	83 c3 01             	add    $0x1,%ebx
         * (char *) pointers[i] = (char) ('a' + i);
- 14a:	88 10                	mov    %dl,(%eax)
+ 159:	88 10                	mov    %dl,(%eax)
     for (i = 0 ; i < c ; i++){
- 14c:	83 fb 15             	cmp    $0x15,%ebx
- 14f:	75 df                	jne    130 <main1+0x10>
+ 15b:	83 fb 15             	cmp    $0x15,%ebx
+ 15e:	75 d0                	jne    130 <main1+0x10>
     }
 
     pid = fork();
- 151:	e8 05 03 00 00       	call   45b <fork>
+ 160:	e8 f6 02 00 00       	call   45b <fork>
 
     if(pid == 0){
- 156:	85 c0                	test   %eax,%eax
- 158:	74 59                	je     1b3 <main1+0x93>
+ 165:	85 c0                	test   %eax,%eax
+ 167:	74 52                	je     1bb <main1+0x9b>
 
     }
     
 
     if(pid != 0){
         wait();
- 15a:	e8 0c 03 00 00       	call   46b <wait>
+ 169:	e8 fd 02 00 00       	call   46b <wait>
     }
 
     if(pid != 0){
     printf(1,"FATHER : \n");
- 15f:	8d 5d a4             	lea    -0x5c(%ebp),%ebx
- 162:	8d 75 f8             	lea    -0x8(%ebp),%esi
- 165:	50                   	push   %eax
- 166:	50                   	push   %eax
- 167:	68 0e 0a 00 00       	push   $0xa0e
- 16c:	6a 01                	push   $0x1
- 16e:	e8 4d 04 00 00       	call   5c0 <printf>
+ 16e:	8d 5d a4             	lea    -0x5c(%ebp),%ebx
+ 171:	8d 75 f8             	lea    -0x8(%ebp),%esi
+ 174:	50                   	push   %eax
+ 175:	50                   	push   %eax
+ 176:	68 0e 0a 00 00       	push   $0xa0e
+ 17b:	6a 01                	push   $0x1
+ 17d:	e8 3e 04 00 00       	call   5c0 <printf>
     for (i = 0 ; i < c ; i++){
- 173:	83 c4 10             	add    $0x10,%esp
- 176:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
- 17d:	8d 76 00             	lea    0x0(%esi),%esi
+ 182:	83 c4 10             	add    $0x10,%esp
+ 185:	8d 76 00             	lea    0x0(%esi),%esi
     printf(1,"%c", *(char * )pointers[i]);
- 180:	8b 03                	mov    (%ebx),%eax
- 182:	83 ec 04             	sub    $0x4,%esp
- 185:	83 c3 04             	add    $0x4,%ebx
- 188:	0f be 00             	movsbl (%eax),%eax
- 18b:	50                   	push   %eax
- 18c:	68 01 0a 00 00       	push   $0xa01
- 191:	6a 01                	push   $0x1
- 193:	e8 28 04 00 00       	call   5c0 <printf>
+ 188:	8b 03                	mov    (%ebx),%eax
+ 18a:	83 ec 04             	sub    $0x4,%esp
+ 18d:	83 c3 04             	add    $0x4,%ebx
+ 190:	0f be 00             	movsbl (%eax),%eax
+ 193:	50                   	push   %eax
+ 194:	68 01 0a 00 00       	push   $0xa01
+ 199:	6a 01                	push   $0x1
+ 19b:	e8 20 04 00 00       	call   5c0 <printf>
     for (i = 0 ; i < c ; i++){
- 198:	83 c4 10             	add    $0x10,%esp
- 19b:	39 de                	cmp    %ebx,%esi
- 19d:	75 e1                	jne    180 <main1+0x60>
+ 1a0:	83 c4 10             	add    $0x10,%esp
+ 1a3:	39 de                	cmp    %ebx,%esi
+ 1a5:	75 e1                	jne    188 <main1+0x68>
     printf(1, " \n DONE \n");
- 19f:	83 ec 08             	sub    $0x8,%esp
- 1a2:	68 04 0a 00 00       	push   $0xa04
- 1a7:	6a 01                	push   $0x1
- 1a9:	e8 12 04 00 00       	call   5c0 <printf>
+ 1a7:	83 ec 08             	sub    $0x8,%esp
+ 1aa:	68 04 0a 00 00       	push   $0xa04
+ 1af:	6a 01                	push   $0x1
+ 1b1:	e8 0a 04 00 00       	call   5c0 <printf>
     printf(1, " \n DONE \n");
 
     }
 
 
     exit();
- 1ae:	e8 b0 02 00 00       	call   463 <exit>
+ 1b6:	e8 a8 02 00 00       	call   463 <exit>
     printf(1,"SON : \n");
- 1b3:	52                   	push   %edx
- 1b4:	8d 5d a4             	lea    -0x5c(%ebp),%ebx
- 1b7:	8d 75 f8             	lea    -0x8(%ebp),%esi
- 1ba:	52                   	push   %edx
- 1bb:	68 f9 09 00 00       	push   $0x9f9
- 1c0:	6a 01                	push   $0x1
- 1c2:	e8 f9 03 00 00       	call   5c0 <printf>
+ 1bb:	52                   	push   %edx
+ 1bc:	8d 5d a4             	lea    -0x5c(%ebp),%ebx
+ 1bf:	8d 75 f8             	lea    -0x8(%ebp),%esi
+ 1c2:	52                   	push   %edx
+ 1c3:	68 f9 09 00 00       	push   $0x9f9
+ 1c8:	6a 01                	push   $0x1
+ 1ca:	e8 f1 03 00 00       	call   5c0 <printf>
     for (i = 0 ; i < c ; i++){
- 1c7:	83 c4 10             	add    $0x10,%esp
- 1ca:	8d b6 00 00 00 00    	lea    0x0(%esi),%esi
+ 1cf:	83 c4 10             	add    $0x10,%esp
+ 1d2:	8d b6 00 00 00 00    	lea    0x0(%esi),%esi
         printf(1,"%c", *(char * )pointers[i]);
- 1d0:	8b 03                	mov    (%ebx),%eax
- 1d2:	83 ec 04             	sub    $0x4,%esp
- 1d5:	83 c3 04             	add    $0x4,%ebx
- 1d8:	0f be 00             	movsbl (%eax),%eax
- 1db:	50                   	push   %eax
- 1dc:	68 01 0a 00 00       	push   $0xa01
- 1e1:	6a 01                	push   $0x1
- 1e3:	e8 d8 03 00 00       	call   5c0 <printf>
+ 1d8:	8b 03                	mov    (%ebx),%eax
+ 1da:	83 ec 04             	sub    $0x4,%esp
+ 1dd:	83 c3 04             	add    $0x4,%ebx
+ 1e0:	0f be 00             	movsbl (%eax),%eax
+ 1e3:	50                   	push   %eax
+ 1e4:	68 01 0a 00 00       	push   $0xa01
+ 1e9:	6a 01                	push   $0x1
+ 1eb:	e8 d0 03 00 00       	call   5c0 <printf>
     for (i = 0 ; i < c ; i++){
- 1e8:	83 c4 10             	add    $0x10,%esp
- 1eb:	39 de                	cmp    %ebx,%esi
- 1ed:	75 e1                	jne    1d0 <main1+0xb0>
- 1ef:	eb ae                	jmp    19f <main1+0x7f>
- 1f1:	66 90                	xchg   %ax,%ax
- 1f3:	66 90                	xchg   %ax,%ax
- 1f5:	66 90                	xchg   %ax,%ax
- 1f7:	66 90                	xchg   %ax,%ax
+ 1f0:	83 c4 10             	add    $0x10,%esp
+ 1f3:	39 de                	cmp    %ebx,%esi
+ 1f5:	75 e1                	jne    1d8 <main1+0xb8>
+ 1f7:	eb ae                	jmp    1a7 <main1+0x87>
  1f9:	66 90                	xchg   %ax,%ax
  1fb:	66 90                	xchg   %ax,%ax
  1fd:	66 90                	xchg   %ax,%ax

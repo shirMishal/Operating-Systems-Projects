@@ -50,6 +50,7 @@ main1(int argc, char *argv[])
     int pid = 0;
     // making sure I have more than 16 pages on RAM
     for (i = 0 ; i < c ; i++){
+        printf(1, "%d\n", i);
         pointers[i] = (uint)sbrk(4096);
         * (char *) pointers[i] = (char) ('a' + i);
     }
