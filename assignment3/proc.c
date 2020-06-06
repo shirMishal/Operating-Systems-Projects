@@ -43,12 +43,14 @@ mycpu(void)
     panic("mycpu called with interrupts enabled\n");
   
   apicid = lapicid();
+  
   // APIC IDs are not guaranteed to be contiguous. Maybe we should have
   // a reverse map, or reserve a register to store &cpus[i].
   for (i = 0; i < ncpu; ++i) {
     if (cpus[i].apicid == apicid)
       return &cpus[i];
   }
+  cprintf("The unknown apicid is %d\n", apicid);
   panic("unknown apicid\n");
 }
 
@@ -92,7 +94,7 @@ found:
   release(&ptable.lock);
 
   // Allocate kernel stack.
-  if((p->kstack = kalloc()) == 0){
+  if((p->kstack = cow_kalloc()) == 0){
     p->state = UNUSED;
     return 0;
   }
@@ -203,8 +205,8 @@ fork(void)
   }
 
   // Copy process state from proc.
-  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
-    kfree(np->kstack);
+  if((np->pgdir = cow_copyuvm(curproc->pgdir, curproc->sz)) == 0){ // (np->pid > 2 ? cow_copyuvm : copyuvm)
+    cow_kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
     return -1;
@@ -230,17 +232,20 @@ fork(void)
     while (last_not_free_in_file >= 0 && curproc->swapped_out_pages[last_not_free_in_file].is_free){ last_not_free_in_file--; }
     last_not_free_in_file++;
     // cprintf("my magic number is %d\n", last_not_free_in_file);
-    void* pg_buffer = kalloc();
+    void* pg_buffer = cow_kalloc();
     for (int i = 0; i < last_not_free_in_file * PGSIZE; i += PGSIZE){
       readFromSwapFile(curproc, pg_buffer, i, PGSIZE);
       writeToSwapFile(np, pg_buffer, i, PGSIZE);
     }
-    kfree(pg_buffer);
+    cow_kfree(pg_buffer);
 
     for (int i = 0; i < MAX_PYSC_PAGES; i++){
       np->ram_pages[i] = curproc->ram_pages[i];
       np->swapped_out_pages[i] = curproc->swapped_out_pages[i];
     }
+
+    np->num_of_actual_pages_in_mem = curproc->num_of_actual_pages_in_mem;
+    np->num_of_pages_in_swap_file = curproc->num_of_pages_in_swap_file;
   }
 
   acquire(&ptable.lock);
@@ -333,7 +338,7 @@ wait(void)
         }
 
         pid = p->pid;
-        kfree(p->kstack);
+        cow_kfree(p->kstack);
         p->kstack = 0;
         freevm(p->pgdir);
         p->pid = 0;

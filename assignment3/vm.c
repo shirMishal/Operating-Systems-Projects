@@ -9,14 +9,59 @@
 #include "spinlock.h"
 
 
-struct pageinfo* find_page_to_swap(struct proc* p);
+struct pageinfo* find_page_to_swap(struct proc* p, pde_t* pgdir);
 static pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc);
 int swap_in(struct proc* p, struct pageinfo* pi);
 void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t* pgdir);
 
-short pg_ref_counts[PHYSTOP/PGSIZE];
-struct spinlock cow_lock;
+void cow_kfree(char* to_free_kva){
+  short count;
+  int acq = 0;
+  if (lapicid() != 0){
+    acq = 1;      
+    // cprintf("kfree %d\n", myproc()->pid);
+    acquire(cow_lock);
+  }
+  // struct proc* p = myproc();
+  // if (p != 0 ){ // && p->pid > 2
+  count = pg_ref_counts[PGROUNDDOWN(V2P(to_free_kva)) / PGSIZE]--;
+  if (count != 1){
+    if (acq){
+      release(cow_lock);
+    }
+    return;
+  }
+  // }
+  // possible bug
+  if (acq){
+    // cprintf("rel kfree %d\n", myproc()->pid);
+    release(cow_lock);
+  }
+  kfree(to_free_kva);
+}
+
+char* cow_kalloc(){
+  char* r = kalloc();
+  int acq = 0;
+  if (lapicid() != 0){
+    acq = 1;
+    // cprintf("kalloc %d\n", myproc()->pid);
+    acquire(cow_lock);
+  }
+  if (pg_ref_counts[PGROUNDDOWN(V2P(r)) / PGSIZE]++ != 0){ // myproc()->pid > 2 && 
+    panic("kalloc allocated something with a reference");
+  }
+  if (acq){
+    release(cow_lock);
+  }
+  return r;
+}
+
+
+// void print_user_char(pde_t* pgdir, void* uva){
+//   cprintf("%x\n", *(char *) P2V(PTE_ADDR(*(walkpgdir(pgdir, uva, 0)))));
+// }
 
 // #if SELECTION == NONE
 // struct pageinfo* find_page_to_swap(struct proc* p){
@@ -26,7 +71,7 @@ struct spinlock cow_lock;
 
 // #if SELECTION == SCFIFO
 uint page_counter = 0;
-struct pageinfo* find_page_to_swap(struct proc* p){
+struct pageinfo* find_page_to_swap(struct proc* p, pde_t* pgdir){
   while(1){
     uint min = 0x0FFFFFFF;
     struct pageinfo* min_pi = 0;
@@ -40,11 +85,13 @@ struct pageinfo* find_page_to_swap(struct proc* p){
           min_pi = pi;
       }
     }
-    pte_t* pte = walkpgdir(p->pgdir, min_pi, 0);
+    pte_t* pte = walkpgdir(pgdir, min_pi, 0);
     // giving the page a second chance
     if (*pte & PTE_A){
       min_pi->page_index = (++page_counter);
       *pte &= ~PTE_A;
+      // cprintf("Second chance to : ");
+      // print_user_char(pgdir, min_pi->va);
     }
     else{
       return min_pi;
@@ -115,7 +162,7 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
   if(*pde & PTE_P){
     pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
   } else {
-    if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
+    if(!alloc || (pgtab = (pte_t*)cow_kalloc()) == 0)
       return 0;
     // Make sure all those PTE_P bits are zero.
     memset(pgtab, 0, PGSIZE);
@@ -198,17 +245,21 @@ setupkvm(void)
   pde_t *pgdir;
   struct kmap *k;
 
-  if((pgdir = (pde_t*)kalloc()) == 0)
+  if((pgdir = (pde_t*)cow_kalloc()) == 0)
     return 0;
   memset(pgdir, 0, PGSIZE);
   if (P2V(PHYSTOP) > (void*)DEVSPACE)
     panic("PHYSTOP too high");
-  for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
+  for(k = kmap; k < &kmap[NELEM(kmap)]; k++){
+    // cprintf("setup1");
     if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,
                 (uint)k->phys_start, k->perm) < 0) {
       freevm(pgdir);
+      // cprintf("setup2");
       return 0;
     }
+    // cprintf("setup2");
+  }
   return pgdir;
 }
 
@@ -263,9 +314,11 @@ inituvm(pde_t *pgdir, char *init, uint sz)
 
   if(sz >= PGSIZE)
     panic("inituvm: more than a page");
-  mem = kalloc();
+  mem = cow_kalloc();
   memset(mem, 0, PGSIZE);
+  // cprintf("init1");
   mappages(pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U);
+  // cprintf("init2");
   memmove(mem, init, sz);
 }
 
@@ -316,28 +369,36 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       // uint number_of_pages_to_alloc = (PGROUNDUP(newsz) - a) / PGSIZE;
       // uint number_of_pages_to_swap = number_of_pages_to_alloc - (MAX_PYSC_PAGES - p->num_of_actual_pages_in_mem);
       if (p->num_of_actual_pages_in_mem >= 16){
-        struct pageinfo* page_to_swap = find_page_to_swap(p);
+        if (p->num_of_pages_in_swap_file >= 16){
+          cprintf("allocuvm out of memory\n");
+          deallocuvm(pgdir, newsz, oldsz);
+          return 0;
+        }
+        struct pageinfo* page_to_swap = find_page_to_swap(p, pgdir);
         // swap page
         // INV  : cell swapped_out_pages[i] is free iff there isnt a page that is written in offset i * PGSIZE in the swap file
+        // cprintf("allocuvm\n");
         swap_out(p, page_to_swap, 0, pgdir);
       }
       p->num_of_actual_pages_in_mem++;
     }
     // now we are sure that we have enough free pages in ram (except maybe some race conditions)
     // #endif
-    mem = kalloc();
+    mem = cow_kalloc();
     if(mem == 0){
       cprintf("allocuvm out of memory\n");
       deallocuvm(pgdir, newsz, oldsz);
       return 0;
     }
     memset(mem, 0, PGSIZE);
+    // cprintf("alloc1");
     if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
       cprintf("allocuvm out of memory (2)\n");
       deallocuvm(pgdir, newsz, oldsz);
-      kfree(mem);
+       cow_kfree(mem);
       return 0;
     }
+    // cprintf("alloc2");
     if (p->pid > 2){
       for (int i = 0; i < MAX_PYSC_PAGES; i++){
         if (p->ram_pages[i].is_free){
@@ -375,9 +436,9 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     else if((*pte & PTE_P) != 0){
       pa = PTE_ADDR(*pte);
       if(pa == 0)
-        panic("kfree");
+        panic(" cow_kfree");
       char *v = P2V(pa);
-      kfree(v);
+       cow_kfree(v);
       if (p->pid > 2 && pgdir == p->pgdir){
         for (int i = 0; i < MAX_PYSC_PAGES; i++){
           if (p->ram_pages[i].va == (void*)a){
@@ -419,10 +480,10 @@ freevm(pde_t *pgdir)
   for(i = 0; i < NPDENTRIES; i++){
     if(pgdir[i] & PTE_P){
       char * v = P2V(PTE_ADDR(pgdir[i]));
-      kfree(v);
+       cow_kfree(v);
     }
   }
-  kfree((char*)pgdir);
+   cow_kfree((char*)pgdir);
 }
 
 // Clear PTE_U on a page. Used to create an inaccessible
@@ -443,27 +504,43 @@ cow_copyuvm(pde_t *pgdir, uint sz)
   pde_t *d;
   pte_t *pte;
   uint pa, i, flags;
-  acquire(&cow_lock);
   if((d = setupkvm()) == 0)
     return 0;
   for(i = 0; i < sz; i += PGSIZE){
+    // getting parents PTE
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
     if(!(*pte & PTE_P) && !(*pte & PTE_PG))
       panic("copyuvm: page not present");
+
+
+    // cprintf("copy %d\n", myproc()->pid);
+    acquire(cow_lock);
+    // physical address
     pa = PTE_ADDR(*pte);
+    // parents flags
     flags = PTE_FLAGS(*pte);
+    // inc the page ref counter
     pg_ref_counts[PGROUNDDOWN(pa)/PGSIZE]++;
+    release(cow_lock);
+
+    // mapping the child to the same physical address with the COW flag and the Write flag *OFF*;
+    // cprintf("cow1");
     if(mappages(d, (void*)i, PGSIZE, pa, (flags & (~PTE_W)) | (PTE_W & flags ? PTE_COW : 0)) < 0) {
+      // cprintf("cow2");
       goto bad;
     }
+    // cprintf("cow2");
+
+    // update parents flags
+    *pte |= (PTE_W & flags ? PTE_COW : 0);
+    *pte &= (~PTE_W);
   }
-  release(&cow_lock);
   return d;
 
 bad:
+  release(cow_lock);
   freevm(d);
-  release(&cow_lock);
   return 0;
 }
 
@@ -486,13 +563,16 @@ copyuvm(pde_t *pgdir, uint sz)
       panic("copyuvm: page not present");
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
+    if((mem = cow_kalloc()) == 0)
       goto bad;
     memmove(mem, (char*)P2V(pa), PGSIZE);
+    // cprintf("copy1");
     if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0) {
-      kfree(mem);
+      // cprintf("copy2");
+       cow_kfree(mem);
       goto bad;
     }
+    // cprintf("copy2");
   }
   return d;
 
@@ -541,11 +621,14 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
   }
   return 0;
 }
+
+
 //  if buffer == 0 then we put buffer <-- kernel_va(page_to_swap->va)  // p2v(phiscal(va))
 //  and use buffer to swap out from
 //  we assume that if buffer is not 0, it is kernel virtual address
 void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t* pgdir){
-  // cprintf("SWAP OUT: index = %d, offset = %d, va = %d\n", page_to_swap->page_index, page_to_swap->swap_file_offset, page_to_swap->va);
+  // cprintf("SWAP OUT : ");
+  // print_user_char(pgdir, page_to_swap->va);
   if (buffer == 0){
     // page_to_swap->va
     buffer = P2V((PTE_ADDR(*(walkpgdir(pgdir, page_to_swap->va, 0)))));
@@ -554,6 +637,7 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
   // INV  : cell swapped_out_pages[i] is free iff there isnt a page that is written in offset i * PGSIZE in the swap file
   int index;
   int found = 0;
+  int count = 0;
   p->num_of_pages_in_swap_file++;
   for (index = 0; index < MAX_PYSC_PAGES; index++){
     if (p->swapped_out_pages[index].is_free){
@@ -564,8 +648,14 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
       break;
     }
   }
+  for (int i = 0; i < MAX_PYSC_PAGES; i++){
+    if (!p->swapped_out_pages[i].is_free){
+      count++;
+    }
+  }
   if (!found){
-    panic("SWAP IN BALAGAN\n");
+    cprintf("RAM count : %d , REAL RAM count : %d\n", p->num_of_pages_in_swap_file, count);
+    panic("SWAP OUT BALAGAN\n");
   }
   if (index < 0 || index > 15){
     panic("we have a bug\n");
@@ -579,7 +669,7 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
   *pte_ptr |= PTE_PG;
   *pte_ptr &= ~PTE_P;
   // *pte_ptr |= PTE_U;
-  kfree(buffer);
+   cow_kfree(buffer);
   // refresh cr3
   lcr3(V2P(p->pgdir));
   page_to_swap->is_free = 1;
@@ -594,9 +684,12 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
 int swap_in(struct proc* p, struct pageinfo* pi){
   pde_t* pgdir = p->pgdir;
   uint offset = pi->swap_file_offset;
+  // cprintf("SWAP IN : ");
+  // print_user_char(pgdir, pi->va);
   int found = 0;
   int index;
-  // cprintf("SWAP IN: index = %d, offset = %d, va = %d\n", pi->page_index, pi->swap_file_offset, pi->va);
+  int count = 0;
+  // cprintf("SWAP IN: va = %d\n", pi->va);
   for (index = 0; index < MAX_PYSC_PAGES; index++){
     if (p->ram_pages[index].is_free){
       found = 1;
@@ -604,11 +697,17 @@ int swap_in(struct proc* p, struct pageinfo* pi){
       break;
     }
   }
+  for (int i = 0; i < MAX_PYSC_PAGES; i++){
+    if (!p->ram_pages[i].is_free){
+      count++;
+    }
+  }
   if (!found){
+    cprintf("RAM count : %d , REAL RAM count : %d\n", p->num_of_actual_pages_in_mem, count);
     panic("SWAP IN BALAGAN\n");
   }
-  void* mem = kalloc();
-  // mem = kalloc();
+  void* mem = cow_kalloc();
+  // mem = cow_kalloc();
   if(mem == 0){
     cprintf("swap in - out of memory\n");
     // deallocuvm(pgdir, newsz, oldsz);
@@ -669,9 +768,9 @@ void swap_page_back(struct proc* p, struct pageinfo* pi_to_swapin){
   if (p->num_of_actual_pages_in_mem == MAX_PYSC_PAGES && p->num_of_pages_in_swap_file == MAX_PYSC_PAGES){
     // cprintf("PGFAULT A\n");
     // file and ram are full - we need temp buffer
-    char* buffer = kalloc();
+    char* buffer = cow_kalloc();
     struct pageinfo pi;
-    struct pageinfo* page_to_swap = find_page_to_swap(p);
+    struct pageinfo* page_to_swap = find_page_to_swap(p, p->pgdir);
     // TODO: make sure that memmove gets virtual address
     memmove(buffer, page_to_swap->va, PGSIZE);
     pi = *page_to_swap;
@@ -681,18 +780,30 @@ void swap_page_back(struct proc* p, struct pageinfo* pi_to_swapin){
 
     // swap out from buffer
     // pi is a deep copy of the pageinfo struct so we dont care that swap_out will change it
+    // cprintf("swap page back 1\n");
     swap_out(p, &pi, buffer, p->pgdir);
   }
   else if (p->num_of_actual_pages_in_mem == MAX_PYSC_PAGES && p->num_of_pages_in_swap_file < MAX_PYSC_PAGES){
     // cprintf("PGFAULT B\n");
-    struct pageinfo* page_to_swap = find_page_to_swap(p);
+    struct pageinfo* page_to_swap = find_page_to_swap(p, p->pgdir);
+    // cprintf("swap page back 2\n");
     swap_out(p, page_to_swap, 0, p->pgdir);
     swap_in(p, pi_to_swapin);
   }
   else{
-    // cprintf("PGFAULT C\n");
     swap_in(p, pi_to_swapin);
   }
+}
+
+int copy_page(pde_t* pgdir, pte_t* pte_ptr){
+  uint pa = PTE_ADDR(*pte_ptr);
+  char* mem = cow_kalloc();
+  if (mem == 0){
+    return -1;
+  }
+  memmove(mem, P2V(pa), PGSIZE);
+  *pte_ptr = PTE_ADDR(P2V(mem)) | PTE_U | PTE_W | PTE_P;
+  return 0;
 }
 
 //PAGEBREAK!

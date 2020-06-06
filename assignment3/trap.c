@@ -82,7 +82,6 @@ trap(struct trapframe *tf)
   ;
     uint faulting_addr = rcr2();
     struct proc* p = myproc();
-    // p->tf->eip
     pte_t* pte_ptr = public_walkpgdir(p->pgdir, (void *)faulting_addr, 0);
     if (!(pte_ptr == 0) && (*pte_ptr & PTE_U) && (*pte_ptr & PTE_PG)){
       // this is a swapped out page, we need to get it back
@@ -95,6 +94,33 @@ trap(struct trapframe *tf)
       }
       p->num_of_pagefaults_occurs++;
       break;
+    }
+    if (*pte_ptr & PTE_COW){
+      // cprintf("trap %d\n", p->pid);
+      acquire(cow_lock);
+      short* ref_count = &pg_ref_counts[PGROUNDDOWN(PTE_ADDR(*pte_ptr)) / PGSIZE];
+      if (*ref_count == 1){
+        *pte_ptr |= PTE_W;
+        // make sure its ok to turn off the cow bit
+        *pte_ptr &= (~PTE_COW);
+        // cprintf("rel trap %d\n", p->pid);
+        release(cow_lock);
+        break;
+      }
+      else if (*ref_count > 1){
+        (*ref_count)--;
+        // cprintf("rel trap %d\n", p->pid);
+        release(cow_lock);
+        int result = copy_page(p->pgdir, pte_ptr);
+        if (result < 0){
+          p->killed = 1;
+          exit();
+        }
+        break;
+      }
+      else{
+        panic("ref count to page is 0 but it was reffed");
+      }
     }
 
   //PAGEBREAK: 13

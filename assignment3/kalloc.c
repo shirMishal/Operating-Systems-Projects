@@ -9,6 +9,20 @@
 #include "mmu.h"
 #include "spinlock.h"
 
+
+
+
+
+struct spinlock r_cow_lock;
+
+void init_cow(){
+  cprintf("initing cow\n");
+  memset((void*)pg_ref_counts, 0, sizeof(pg_ref_counts));
+  initlock(&r_cow_lock, "cow lock");
+  cow_lock = &r_cow_lock;
+  cprintf("initing cow end\n");
+}
+
 void freerange(void *vstart, void *vend);
 extern char end[]; // first address after kernel loaded from ELF file
                    // defined by the kernel linker script in kernel.ld
@@ -83,7 +97,6 @@ char*
 kalloc(void)
 {
   struct run *r;
-
   if(kmem.use_lock)
     acquire(&kmem.lock);
   r = kmem.freelist;

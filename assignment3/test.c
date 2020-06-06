@@ -3,7 +3,7 @@
 #include "user.h"
 
 int getNumberOfFreePages(){
-    return 1;
+    return get_number_of_free_pages();
 }
 
 int

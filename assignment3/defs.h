@@ -11,6 +11,11 @@ struct stat;
 struct superblock;
 struct pageinfo;
 
+#define PHYSTOP 0xE000000           // Top physical memory
+#define PGSIZE          4096    // bytes mapped by a page
+
+
+
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
@@ -79,6 +84,8 @@ char*           kalloc(void);
 void            kfree(char*);
 void            kinit1(void*, void*);
 void            kinit2(void*, void*);
+void            init_cow(void);
+
 
 // kbd.c
 void            kbdintr(void);
@@ -196,6 +203,15 @@ void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
+int             copy_page(pde_t* pgdir, uint* pte_ptr);
+char*           cow_kalloc(void);
+pde_t*          cow_copyuvm(pde_t *pgdir, uint sz);
+void            cow_kfree(char* to_free_kva);
+
+
+
+short pg_ref_counts[PHYSTOP/PGSIZE];
+struct spinlock* cow_lock;
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

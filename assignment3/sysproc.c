@@ -89,3 +89,13 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int sys_get_number_of_free_pages(void){
+  int count = 0;
+  for (int i = 0; i < PHYSTOP / PGSIZE; i++){
+    if (pg_ref_counts[i] != 0){
+      count++;
+    }
+  }
+  return (PHYSTOP/PGSIZE) - count;
+}

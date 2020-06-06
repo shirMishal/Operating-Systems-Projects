@@ -17,24 +17,45 @@ extern char end[]; // first address after kernel loaded from ELF file
 int
 main(void)
 {
+  // cprintf("1");
   kinit1(end, P2V(4*1024*1024)); // phys page allocator
+  // cprintf("2");
   kvmalloc();      // kernel page table
+  // cprintf("3");
   mpinit();        // detect other processors
+  // cprintf("4");
   lapicinit();     // interrupt controller
+  // cprintf("5");
+  init_cow();
+  // cprintf("6");
   seginit();       // segment descriptors
+  // cprintf("7");
   picinit();       // disable pic
+  // cprintf("8");
   ioapicinit();    // another interrupt controller
+  // cprintf("9");
   consoleinit();   // console hardware
+  // cprintf("10");
   uartinit();      // serial port
+  // cprintf("11");
   pinit();         // process table
+  // cprintf("12");
   tvinit();        // trap vectors
+  // cprintf("13");
   binit();         // buffer cache
+  // cprintf("14");
   fileinit();      // file table
+  // cprintf("15");
   ideinit();       // disk 
+  // cprintf("16");
   startothers();   // start other processors
+  // cprintf("17");
   kinit2(P2V(4*1024*1024), P2V(PHYSTOP)); // must come after startothers()
+  // cprintf("18");
   userinit();      // first user process
+  // cprintf("19\n");
   mpmain();        // finish this processor's setup
+  // cprintf("20\n");
 }
 
 // Other CPUs jump here from entryother.S.
@@ -81,7 +102,7 @@ startothers(void)
     // Tell entryother.S what stack to use, where to enter, and what
     // pgdir to use. We cannot use kpgdir yet, because the AP processor
     // is running in low  memory, so we use entrypgdir for the APs too.
-    stack = kalloc();
+    stack = cow_kalloc();
     *(void**)(code-4) = stack + KSTACKSIZE;
     *(void(**)(void))(code-8) = mpenter;
     *(int**)(code-12) = (void *) V2P(entrypgdir);
