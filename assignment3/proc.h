@@ -77,5 +77,6 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+int sys_get_number_of_free_pages_impl(void);
 
 

@@ -210,7 +210,7 @@ void            cow_kfree(char* to_free_kva);
 
 
 
-short pg_ref_counts[PHYSTOP/PGSIZE];
+char pg_ref_counts[PHYSTOP/PGSIZE];
 struct spinlock* cow_lock;
 
 // number of elements in fixed-size array

@@ -95,10 +95,10 @@ trap(struct trapframe *tf)
       p->num_of_pagefaults_occurs++;
       break;
     }
-    if (*pte_ptr & PTE_COW){
+    if (!(pte_ptr == 0) && *pte_ptr & PTE_COW){
       // cprintf("trap %d\n", p->pid);
       acquire(cow_lock);
-      short* ref_count = &pg_ref_counts[PGROUNDDOWN(PTE_ADDR(*pte_ptr)) / PGSIZE];
+      char* ref_count = &(pg_ref_counts[PGROUNDDOWN(PTE_ADDR(*pte_ptr)) / PGSIZE]);
       if (*ref_count == 1){
         *pte_ptr |= PTE_W;
         // make sure its ok to turn off the cow bit

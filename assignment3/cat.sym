@@ -14,7 +14,7 @@
 00000000 ulib.c
 00000000 printf.c
 00000420 printint
-00000878 digits.1085
+00000878 digits.1087
 00000000 umalloc.c
 00000b60 freep
 00000b64 base
@@ -27,6 +27,7 @@
 00000090 cat
 00000730 malloc
 00000403 sleep
+00000413 get_number_of_free_pages
 00000383 pipe
 00000393 write
 000003cb fstat

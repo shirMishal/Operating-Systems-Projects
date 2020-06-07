@@ -189,6 +189,16 @@ growproc(int n)
   return 0;
 }
 
+int sys_get_number_of_free_pages_impl(void){
+  int count = 0;
+  for (int i = 0; i < PHYSTOP / PGSIZE; i++){
+    if (pg_ref_counts[i] != 0){
+      count++;
+    }
+  }
+  return (PHYSTOP/PGSIZE) - count;
+}
+
 // Create a new process copying p as the parent.
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
@@ -203,6 +213,8 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
+
+  cprintf("pages : %d, curproc size : %d\n", 57344 - sys_get_number_of_free_pages_impl(), curproc->sz);
 
   // Copy process state from proc.
   if((np->pgdir = cow_copyuvm(curproc->pgdir, curproc->sz)) == 0){ // (np->pid > 2 ? cow_copyuvm : copyuvm)

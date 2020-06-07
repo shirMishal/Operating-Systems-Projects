@@ -16,7 +16,7 @@ int swap_in(struct proc* p, struct pageinfo* pi);
 void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t* pgdir);
 
 void cow_kfree(char* to_free_kva){
-  short count;
+  char count;
   int acq = 0;
   if (lapicid() != 0){
     acq = 1;      
@@ -25,8 +25,8 @@ void cow_kfree(char* to_free_kva){
   }
   // struct proc* p = myproc();
   // if (p != 0 ){ // && p->pid > 2
-  count = pg_ref_counts[PGROUNDDOWN(V2P(to_free_kva)) / PGSIZE]--;
-  if (count != 1){
+  count = --pg_ref_counts[PGROUNDDOWN(V2P(to_free_kva)) / PGSIZE];
+  if (count != 0){
     if (acq){
       release(cow_lock);
     }
@@ -43,13 +43,18 @@ void cow_kfree(char* to_free_kva){
 
 char* cow_kalloc(){
   char* r = kalloc();
+  if (r == 0){
+    return r;
+  }
   int acq = 0;
+  // cprintf("kalloc \n");
   if (lapicid() != 0){
     acq = 1;
     // cprintf("kalloc %d\n", myproc()->pid);
     acquire(cow_lock);
   }
-  if (pg_ref_counts[PGROUNDDOWN(V2P(r)) / PGSIZE]++ != 0){ // myproc()->pid > 2 && 
+  if (pg_ref_counts[PGROUNDDOWN(V2P(r)) / PGSIZE]++ != 0){ 
+    cprintf("actual ref count = %d, pg index = %x, pg pa = %x\n", pg_ref_counts[PGROUNDDOWN(V2P(r)) / PGSIZE] - 1, PGROUNDDOWN(V2P(r)) / PGSIZE, V2P(r));
     panic("kalloc allocated something with a reference");
   }
   if (acq){
@@ -99,8 +104,14 @@ struct pageinfo* find_page_to_swap(struct proc* p, pde_t* pgdir){
   }
 }
 
-struct pageinfo* find_page_to_swap1(struct proc* p){
-  for (int i = 0; i < MAX_PYSC_PAGES; i++){
+
+
+struct pageinfo* find_page_to_swap1(struct proc* p, pde_t* pgdir){
+  register int j asm("eax");
+  j = j % 16;
+  cprintf("%d\n", j);
+  for (int i = j; i != (j - 1) % 16; i = (i + 1) % 16){
+    cprintf("%d\n", j);
     if (!p->ram_pages[i].is_free){
       return &p->ram_pages[i];
     }
@@ -164,6 +175,7 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
   } else {
     if(!alloc || (pgtab = (pte_t*)cow_kalloc()) == 0)
       return 0;
+    // cprintf("walkpgdir allocated. pages = %d\n", sys_get_number_of_free_pages_impl());
     // Make sure all those PTE_P bits are zero.
     memset(pgtab, 0, PGSIZE);
     // The permissions here are overly generous, but they can
@@ -189,6 +201,7 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
 
   a = (char*)PGROUNDDOWN((uint)va);
   last = (char*)PGROUNDDOWN(((uint)va) + size - 1);
+  // cprintf("mappages start: %x end: %x \n", a, last);
   for(;;){
     if((pte = walkpgdir(pgdir, a, 1)) == 0)
       return -1;
@@ -395,7 +408,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
       cprintf("allocuvm out of memory (2)\n");
       deallocuvm(pgdir, newsz, oldsz);
-       cow_kfree(mem);
+      cow_kfree(mem);
       return 0;
     }
     // cprintf("alloc2");
@@ -436,9 +449,9 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     else if((*pte & PTE_P) != 0){
       pa = PTE_ADDR(*pte);
       if(pa == 0)
-        panic(" cow_kfree");
+        panic("cow_kfree");
       char *v = P2V(pa);
-       cow_kfree(v);
+      cow_kfree(v);
       if (p->pid > 2 && pgdir == p->pgdir){
         for (int i = 0; i < MAX_PYSC_PAGES; i++){
           if (p->ram_pages[i].va == (void*)a){
@@ -506,6 +519,9 @@ cow_copyuvm(pde_t *pgdir, uint sz)
   uint pa, i, flags;
   if((d = setupkvm()) == 0)
     return 0;
+  cprintf("cow : pages = %d\n", 57344 - sys_get_number_of_free_pages_impl());
+
+  // cprintf("cow_copyuvm : pages = %d\n", 57344 - sys_get_number_of_free_pages_impl());
   for(i = 0; i < sz; i += PGSIZE){
     // getting parents PTE
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
@@ -531,7 +547,6 @@ cow_copyuvm(pde_t *pgdir, uint sz)
       goto bad;
     }
     // cprintf("cow2");
-
     // update parents flags
     *pte |= (PTE_W & flags ? PTE_COW : 0);
     *pte &= (~PTE_W);
@@ -539,7 +554,7 @@ cow_copyuvm(pde_t *pgdir, uint sz)
   return d;
 
 bad:
-  release(cow_lock);
+  // release(cow_lock);
   freevm(d);
   return 0;
 }
@@ -669,7 +684,7 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
   *pte_ptr |= PTE_PG;
   *pte_ptr &= ~PTE_P;
   // *pte_ptr |= PTE_U;
-   cow_kfree(buffer);
+  cow_kfree(buffer);
   // refresh cr3
   lcr3(V2P(p->pgdir));
   page_to_swap->is_free = 1;
