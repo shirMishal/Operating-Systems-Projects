@@ -214,7 +214,7 @@ fork(void)
     return -1;
   }
 
-  cprintf("pages : %d, curproc size : %d\n", 57344 - sys_get_number_of_free_pages_impl(), curproc->sz);
+  //cprintf("pages : %d, curproc size : %d\n", 57344 - sys_get_number_of_free_pages_impl(), curproc->sz);
 
   // Copy process state from proc.
   if((np->pgdir = cow_copyuvm(curproc->pgdir, curproc->sz)) == 0){ // (np->pid > 2 ? cow_copyuvm : copyuvm)
@@ -410,7 +410,7 @@ scheduler(void)
 
       swtch(&(c->scheduler), p->context);
       switchkvm();
-
+      
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
@@ -442,6 +442,7 @@ sched(void)
   if(readeflags()&FL_IF)
     panic("sched interruptible");
   intena = mycpu()->intena;
+
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
 }

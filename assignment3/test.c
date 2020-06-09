@@ -5,7 +5,24 @@
 int getNumberOfFreePages(){
     return get_number_of_free_pages();
 }
-
+int main2(int argc, char *argv[])
+{   
+    int PGSIZE = 4096;
+    int n_of_allocations = 20;
+    char * Fmem[1];
+    Fmem[0] = malloc(n_of_allocations * PGSIZE);
+    printf(1, "Allocation done\n");
+    sleep(500);
+    int i = 0;
+    while (i <100) {
+        *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
+        i++;
+    }
+    printf(1, "Access done1\n");
+    
+    exit();
+    return 0;
+}
 int
 main(void)
 {

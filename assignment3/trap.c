@@ -80,6 +80,7 @@ trap(struct trapframe *tf)
 
   case T_PGFLT:
   ;
+    
     uint faulting_addr = rcr2();
     struct proc* p = myproc();
     pte_t* pte_ptr = public_walkpgdir(p->pgdir, (void *)faulting_addr, 0);
@@ -147,9 +148,14 @@ trap(struct trapframe *tf)
 
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
-  if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER)
-    yield();
+  if(myproc() && myproc()->state == RUNNING && tf->trapno == T_IRQ0+IRQ_TIMER){
+      // #if SELECTION==NFUA
+      // struct proc* p = myproc();
+      // update_age_nfua(p);
+      // #endif
+      yield();
+    }
+    
 
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)

@@ -11,6 +11,12 @@ struct stat;
 struct superblock;
 struct pageinfo;
 
+#define NONE 0
+#define NFUA 1
+#define LAPA 2
+#define SCFIFO 3 
+#define AQ 4
+
 #define PHYSTOP 0xE000000           // Top physical memory
 #define PGSIZE          4096    // bytes mapped by a page
 
@@ -207,7 +213,7 @@ int             copy_page(pde_t* pgdir, uint* pte_ptr);
 char*           cow_kalloc(void);
 pde_t*          cow_copyuvm(pde_t *pgdir, uint sz);
 void            cow_kfree(char* to_free_kva);
-
+void            update_age_nfua(struct proc* p);
 
 
 char pg_ref_counts[PHYSTOP/PGSIZE];
