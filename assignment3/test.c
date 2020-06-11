@@ -14,7 +14,7 @@ int main2(int argc, char *argv[])
     printf(1, "Allocation done\n");
     sleep(500);
     int i = 0;
-    while (i <100) {
+    while (i <50) {
         *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
         i++;
     }

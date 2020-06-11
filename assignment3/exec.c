@@ -17,6 +17,7 @@ void intiate_pg_info(struct proc* p){
     p->ram_pages[i].aging_counter = p->swapped_out_pages[i].aging_counter = 0;
     p->ram_pages[i].swap_file_offset = p->swapped_out_pages[i].swap_file_offset = 0;
     p->ram_pages[i].va = p->swapped_out_pages[i].va = 0;
+    p->advance_queue[i] = -1;//AQ
   }
 }
 
@@ -35,6 +36,7 @@ exec(char *path, char **argv)
   uint pg_out_bu = 0, pg_flt_bu = 0, pg_mem_bu = 0, pg_swp_bu = 0;
   struct pageinfo mem_pginfo_bu[MAX_PYSC_PAGES];
   struct pageinfo swp_pginfo_bu[MAX_PYSC_PAGES];
+  int advance_q_bu[MAX_PYSC_PAGES];
   struct file* swap_file_bu = 0;
   struct file* temp_swap_file = 0;
 
@@ -68,6 +70,7 @@ exec(char *path, char **argv)
     for (int i = 0; i < MAX_PYSC_PAGES; i++){
       mem_pginfo_bu[i] = curproc->ram_pages[i];
       swp_pginfo_bu[i] = curproc->swapped_out_pages[i];
+      advance_q_bu[i] = curproc->advance_queue[i];//AQ
     }
     // ******************BACKUP****************************
     intiate_pg_info(curproc);
@@ -161,6 +164,7 @@ exec(char *path, char **argv)
       for (int i = 0; i < MAX_PYSC_PAGES; i++){
         curproc->ram_pages[i] = mem_pginfo_bu[i];
         curproc->swapped_out_pages[i] = swp_pginfo_bu[i];
+        curproc->advance_queue[i] = advance_q_bu[i];//AQ
       }
       // ******************RESTORE****************************
       removeSwapFile(curproc);

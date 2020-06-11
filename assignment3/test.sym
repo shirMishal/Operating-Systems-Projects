@@ -18,13 +18,13 @@
 00000000 umalloc.c
 00000e00 freep
 00000e04 base
-00000120 getNumberOfFreePages
+00000080 getNumberOfFreePages
 000002a0 strcpy
 00000640 printf
 000001b0 main1
 000004c0 memmove
 0000053a mknod
-00000130 main2
+00000090 main2
 000003b0 gets
 00000572 getpid
 000008a0 malloc

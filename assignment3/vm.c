@@ -185,6 +185,89 @@ struct pageinfo* find_page_to_swap_lapa(struct proc* p, pde_t* pgdir){
   return min_pi;
 }
 #endif
+//#if SELECTION==AQ
+// index 0 begin of queue 15 end of queue 
+//last page in queue is to be removed next
+
+void printQ(struct proc* p){
+  for (int i = 0; i < MAX_PYSC_PAGES; i++){
+    cprintf("%d, ",p->advance_queue[i]);
+  }
+  cprintf("\n");
+}
+
+  void add_page_index_to_queue(struct proc* p, int index){
+    int i=0;
+    while (p->advance_queue[i]==-1){
+      i++;
+    }
+    i--;
+    p->advance_queue[i]= index;
+  }
+  void remove_page_index_from_q(struct proc* p, int index){
+    int i;
+    int found = 0;
+    for(  i =15; i>0; i--){
+      if(p->advance_queue[i]==index){
+        p->advance_queue[i] = -1;
+        found = 1;
+        break;
+      }
+    }
+    if (found){
+      while(i>0){
+        p->advance_queue[i] = p->advance_queue[i-1];
+        i--;
+      }
+      p->advance_queue[0] = -1;
+    }
+    
+  }
+  struct pageinfo* find_page_to_swap_aq(struct proc* p){
+    int page_index = p->advance_queue[15];
+    cprintf("page index AQ: %d\n",page_index);
+    if (page_index==-1){
+      panic("queue is empty");
+    }
+    //offset queue by 1
+    for (int i = 15; i>0; i--){
+      p->advance_queue[i] = p->advance_queue[i-1];
+    }
+    p->advance_queue[0]= -1;
+    return &(p->ram_pages[page_index]);
+  }
+  void update_queue(struct proc* p){
+    cprintf("before update: ");printQ(p);
+    int i=15;
+    while (i>0){
+      if (p->advance_queue[i] == -1){
+        break;
+      }
+      int curr_index = p->advance_queue[i];
+      int prev_index = p->advance_queue[i-1];
+      pte_t* curr_pte = walkpgdir(p->pgdir,(void*) p->ram_pages[curr_index].va, 0);
+      pte_t* prev_pte = walkpgdir(p->pgdir,(void*) p->ram_pages[prev_index].va, 0);
+      if(!(uint)*curr_pte || !(uint)*prev_pte ){
+        panic("can't find page from AQ");
+      }
+      if ((*curr_pte & PTE_A)&& ((*prev_pte & PTE_A)==0) ){//curr accessed and prev not, swich them
+        cprintf("p was accessed: %d\n", curr_index);
+        *curr_pte &= ~PTE_A;
+        p->advance_queue[i] = prev_index;
+        p->advance_queue[i-1] = curr_index;
+        i=i-2;
+      }
+      else{
+        i--;
+      }
+    }
+    cprintf("after update: "); printQ(p);
+    lcr3(V2P(p->pgdir));//verify
+  }
+
+  
+//#endif
+
 
 struct pageinfo* find_page_to_swap(struct proc* p, pde_t* pgdir){
   struct pageinfo* pi;
@@ -202,6 +285,10 @@ struct pageinfo* find_page_to_swap(struct proc* p, pde_t* pgdir){
   #if SELECTION==LAPA
     update_age(p);
     pi = find_page_to_swap_lapa(p,pgdir);
+  #endif
+  #if SELECTION==AQ
+    update_queue(p);
+    pi = find_page_to_swap_aq(p);
   #endif
   return pi;
 }
@@ -524,7 +611,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
           p->ram_pages[i].aging_counter = 0;//NFUA
           #endif
           #if SELECTION==LAPA
-          p->ram_pages[i].aging_counter = 0XFFFFFFFF;//NFUA
+          p->ram_pages[i].aging_counter = 0XFFFFFFFF;//LAPA
+          #endif
+          #if SELECTION==AQ
+          add_page_index_to_queue(p, i);
           #endif
           break;
         }
@@ -565,10 +655,13 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
             p->num_of_actual_pages_in_mem--;
             p->ram_pages[i].is_free = 1;
             #if SELECTION==LAPA
-            p->ram_pages[i].aging_counter = 0XFFFFFFFF;//NFUA
+            p->ram_pages[i].aging_counter = 0XFFFFFFFF;
             #endif
             #if SELECTION==NFUA
             p->ram_pages[i].aging_counter = 0;
+            #endif
+            #if SELECTION==AQ
+            remove_page_index_from_q(p,i);
             #endif
             p->ram_pages[i].va = 0;
             break;
@@ -854,7 +947,10 @@ int swap_in(struct proc* p, struct pageinfo* pi){
   p->ram_pages[index].aging_counter = 0;//NFUA
   #endif
   #if SELECTION==LAPA
-  p->ram_pages[index].aging_counter = 0XFFFFFFFF;//NFUA
+  p->ram_pages[index].aging_counter = 0XFFFFFFFF;
+  #endif
+  #if SELECTION==AQ
+  add_page_index_to_queue(p, index);
   #endif
   p->ram_pages[index].page_index = ++page_counter;
   p->ram_pages[index].va = va;
