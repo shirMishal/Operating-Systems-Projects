@@ -16,6 +16,8 @@ struct pageinfo;
 #define LAPA 2
 #define SCFIFO 3 
 #define AQ 4
+#define FALSE 0
+#define TRUE 1
 
 #define PHYSTOP 0xE000000           // Top physical memory
 #define PGSIZE          4096    // bytes mapped by a page

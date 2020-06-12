@@ -12,14 +12,7 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
-static char *states[] = {
-  [UNUSED]    "unused",
-  [EMBRYO]    "embryo",
-  [SLEEPING]  "sleep ",
-  [RUNNABLE]  "runble",
-  [RUNNING]   "run   ",
-  [ZOMBIE]    "zombie"
-  };
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -121,7 +114,7 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
-
+#if SELECTION!=NONE
  if (p->pid > 2){
     p->num_of_actual_pages_in_mem = 0;
     p->num_of_pagefaults_occurs = 0;
@@ -138,6 +131,7 @@ found:
       #endif
     }
  }
+ #endif
   return p;
 }
 
@@ -249,7 +243,7 @@ fork(void)
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
   pid = np->pid;
-
+  #if SELECTION!=NONE
   if (curproc->pid > 2 && np->pid > 2){
     int last_not_free_in_file = MAX_PYSC_PAGES - 1;
     while (last_not_free_in_file >= 0 && curproc->swapped_out_pages[last_not_free_in_file].is_free){ last_not_free_in_file--; }
@@ -273,7 +267,7 @@ fork(void)
     np->num_of_actual_pages_in_mem = curproc->num_of_actual_pages_in_mem;
     np->num_of_pages_in_swap_file = curproc->num_of_pages_in_swap_file;
   }
-
+  #endif
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
@@ -329,6 +323,14 @@ exit(void)
   curproc->state = ZOMBIE;
 
   #if VERBOSE_PRINT==TRUE 
+  static char *states[] = {
+  [UNUSED]    "unused",
+  [EMBRYO]    "embryo",
+  [SLEEPING]  "sleep ",
+  [RUNNABLE]  "runble",
+  [RUNNING]   "run   ",
+  [ZOMBIE]    "zombie"
+  };
   //verify  
   cprintf("%d %s RAM: %d SWAP: %d PGFAULTS: %d SWAPED_OUT: %d %s\n", 
   curproc->pid, states[curproc->state], curproc->num_of_actual_pages_in_mem, 
@@ -360,13 +362,7 @@ wait(void)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
-        // #if VERBOSE_PRINT==TRUE 
-        // //verify  
-        // cprintf("%d %s RAM: %d SWAP: %d PGFAULTS: %d SWAPED_OUT: %d %s", 
-        //  p->pid, p->state,  p->num_of_actual_pages_in_mem, p->num_of_pages_in_swap_file,
-        //  p->num_of_pagefaults_occurs, p->num_of_pageOut_occured, p->name);
-        // #endif
-        
+        #if SELECTION!= NONE 
         if (p->pid > 2){
           p->num_of_pagefaults_occurs = 0;
           p->num_of_actual_pages_in_mem = 0;
@@ -379,7 +375,7 @@ wait(void)
             p->ram_pages[i].va = p->swapped_out_pages[i].va = 0;
           }
         }
-
+        #endif
         pid = p->pid;
         cow_kfree(p->kstack);
         p->kstack = 0;
@@ -389,8 +385,6 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-
-
         release(&ptable.lock);
         return pid;
       }
@@ -473,7 +467,6 @@ sched(void)
   if(readeflags()&FL_IF)
     panic("sched interruptible");
   intena = mycpu()->intena;
-
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
 }
@@ -620,7 +613,11 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
+    #if SELECTION == NONE
+    cprintf("%d %s %s", p->pid, state, p->name);
+    #else
     cprintf("%d %s RAM: %d SWAP: %d PGFAULTS: %d SWAPED_OUT: %d %s", p->pid, state,  p->num_of_actual_pages_in_mem, p->num_of_pages_in_swap_file, p->num_of_pagefaults_occurs, p->num_of_pageOut_occured, p->name);
+    #endif
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
@@ -628,7 +625,9 @@ procdump(void)
     }
     cprintf("\n");
   }
+  #if SELECTION != NONE
   int currentFree = sys_get_number_of_free_pages_impl();
   int totalFree = (PHYSTOP-EXTMEM) / PGSIZE ;///verify
   cprintf("%d / %d free page frames in the system\n", currentFree, totalFree);
+  #endif
 }

@@ -5,12 +5,12 @@ _test:     file format elf32-i386
 Disassembly of section .text:
 
 00000000 <main>:
-
-int getNumberOfFreePages(){
-    return get_number_of_free_pages();
+    exit();
+    return 0;
 }
-int main(int argc, char *argv[])
-{   
+int
+main(void)
+{
    0:	8d 4c 24 04          	lea    0x4(%esp),%ecx
    4:	83 e4 f0             	and    $0xfffffff0,%esp
    7:	ff 71 fc             	pushl  -0x4(%ecx)
@@ -19,211 +19,200 @@ int main(int argc, char *argv[])
    d:	56                   	push   %esi
    e:	53                   	push   %ebx
    f:	51                   	push   %ecx
-    Fmem[0] = malloc(n_of_allocations * PGSIZE);
-    printf(1, "Allocation done\n");
-    sleep(500);
-    int i = 0;
-    while (i <50) {
-        *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
-  10:	bb cd cc cc cc       	mov    $0xcccccccd,%ebx
-{   
-  15:	83 ec 18             	sub    $0x18,%esp
-    Fmem[0] = malloc(n_of_allocations * PGSIZE);
-  18:	68 00 40 01 00       	push   $0x14000
-  1d:	e8 7e 08 00 00       	call   8a0 <malloc>
-  22:	89 c6                	mov    %eax,%esi
-    printf(1, "Allocation done\n");
-  24:	58                   	pop    %eax
-  25:	5a                   	pop    %edx
-  26:	68 98 09 00 00       	push   $0x998
-  2b:	6a 01                	push   $0x1
-  2d:	e8 0e 06 00 00       	call   640 <printf>
-    sleep(500);
-  32:	c7 04 24 f4 01 00 00 	movl   $0x1f4,(%esp)
-  39:	e8 44 05 00 00       	call   582 <sleep>
-  3e:	83 c4 10             	add    $0x10,%esp
-    int i = 0;
-  41:	31 c9                	xor    %ecx,%ecx
-  43:	90                   	nop
-  44:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
-        *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
-  48:	89 c8                	mov    %ecx,%eax
-  4a:	f7 e3                	mul    %ebx
-  4c:	c1 ea 04             	shr    $0x4,%edx
-  4f:	8d 04 92             	lea    (%edx,%edx,4),%eax
-  52:	89 ca                	mov    %ecx,%edx
-        i++;
-  54:	83 c1 01             	add    $0x1,%ecx
-        *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
-  57:	c1 e0 02             	shl    $0x2,%eax
-  5a:	29 c2                	sub    %eax,%edx
-  5c:	89 d0                	mov    %edx,%eax
-  5e:	c1 e0 0c             	shl    $0xc,%eax
-    while (i <50) {
-  61:	83 f9 32             	cmp    $0x32,%ecx
-        *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
-  64:	c6 04 06 63          	movb   $0x63,(%esi,%eax,1)
-    while (i <50) {
-  68:	75 de                	jne    48 <main+0x48>
-    }
-    printf(1, "Access done1\n");
-  6a:	83 ec 08             	sub    $0x8,%esp
-  6d:	68 a9 09 00 00       	push   $0x9a9
-  72:	6a 01                	push   $0x1
-  74:	e8 c7 05 00 00       	call   640 <printf>
-    
-    exit();
-  79:	e8 74 04 00 00       	call   4f2 <exit>
-  7e:	66 90                	xchg   %ax,%ax
-
-00000080 <getNumberOfFreePages>:
-int getNumberOfFreePages(){
-  80:	55                   	push   %ebp
-  81:	89 e5                	mov    %esp,%ebp
-}
-  83:	5d                   	pop    %ebp
-    return get_number_of_free_pages();
-  84:	e9 09 05 00 00       	jmp    592 <get_number_of_free_pages>
-  89:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
-
-00000090 <main2>:
-    return 0;
-}
-int
-main2(void)
-{
-  90:	55                   	push   %ebp
-  91:	89 e5                	mov    %esp,%ebp
-  93:	56                   	push   %esi
-  94:	53                   	push   %ebx
   uint c = 21;
   uint pointers[c];
    printf(1, "IN PARENT: BEFORE SBRK Number of occupied pages before fork %d\n" ,57344 - getNumberOfFreePages());
  
   // making sure I have more than 16 pages on RAM
   for (i = 0 ; i < c ; i++){
-  95:	31 db                	xor    %ebx,%ebx
+  10:	31 db                	xor    %ebx,%ebx
 {
-  97:	83 ec 60             	sub    $0x60,%esp
+  12:	83 ec 6c             	sub    $0x6c,%esp
     return get_number_of_free_pages();
-  9a:	e8 f3 04 00 00       	call   592 <get_number_of_free_pages>
+  15:	e8 78 05 00 00       	call   592 <get_number_of_free_pages>
    printf(1, "IN PARENT: BEFORE SBRK Number of occupied pages before fork %d\n" ,57344 - getNumberOfFreePages());
-  9f:	ba 00 e0 00 00       	mov    $0xe000,%edx
-  a4:	83 ec 04             	sub    $0x4,%esp
-  a7:	29 c2                	sub    %eax,%edx
-  a9:	52                   	push   %edx
-  aa:	68 10 0a 00 00       	push   $0xa10
-  af:	6a 01                	push   $0x1
-  b1:	e8 8a 05 00 00       	call   640 <printf>
-  b6:	83 c4 10             	add    $0x10,%esp
-  b9:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
+  1a:	ba 00 e0 00 00       	mov    $0xe000,%edx
+  1f:	83 ec 04             	sub    $0x4,%esp
+  22:	29 c2                	sub    %eax,%edx
+  24:	52                   	push   %edx
+  25:	68 10 0a 00 00       	push   $0xa10
+  2a:	6a 01                	push   $0x1
+  2c:	e8 0f 06 00 00       	call   640 <printf>
+  31:	83 c4 10             	add    $0x10,%esp
+  34:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
         printf(1, "%d\n", i);
-  c0:	83 ec 04             	sub    $0x4,%esp
-  c3:	53                   	push   %ebx
-  c4:	68 b7 09 00 00       	push   $0x9b7
-  c9:	6a 01                	push   $0x1
-  cb:	e8 70 05 00 00       	call   640 <printf>
+  38:	83 ec 04             	sub    $0x4,%esp
+  3b:	53                   	push   %ebx
+  3c:	68 b7 09 00 00       	push   $0x9b7
+  41:	6a 01                	push   $0x1
+  43:	e8 f8 05 00 00       	call   640 <printf>
         pointers[i] = (uint)sbrk(4096);
-  d0:	c7 04 24 00 10 00 00 	movl   $0x1000,(%esp)
-  d7:	e8 9e 04 00 00       	call   57a <sbrk>
+  48:	c7 04 24 00 10 00 00 	movl   $0x1000,(%esp)
+  4f:	e8 26 05 00 00       	call   57a <sbrk>
         * (char *) pointers[i] = (char) ('a' + i);
-  dc:	8d 53 61             	lea    0x61(%ebx),%edx
+  54:	8d 53 61             	lea    0x61(%ebx),%edx
         pointers[i] = (uint)sbrk(4096);
-  df:	89 44 9d a4          	mov    %eax,-0x5c(%ebp,%ebx,4)
+  57:	89 44 9d 94          	mov    %eax,-0x6c(%ebp,%ebx,4)
   for (i = 0 ; i < c ; i++){
-  e3:	83 c3 01             	add    $0x1,%ebx
-  e6:	83 c4 10             	add    $0x10,%esp
-  e9:	83 fb 15             	cmp    $0x15,%ebx
+  5b:	83 c3 01             	add    $0x1,%ebx
+  5e:	83 c4 10             	add    $0x10,%esp
+  61:	83 fb 15             	cmp    $0x15,%ebx
         * (char *) pointers[i] = (char) ('a' + i);
-  ec:	88 10                	mov    %dl,(%eax)
+  64:	88 10                	mov    %dl,(%eax)
   for (i = 0 ; i < c ; i++){
-  ee:	75 d0                	jne    c0 <main2+0x30>
-  f0:	8d 5d a4             	lea    -0x5c(%ebp),%ebx
-  f3:	8d 75 f8             	lea    -0x8(%ebp),%esi
-  f6:	8d 76 00             	lea    0x0(%esi),%esi
-  f9:	8d bc 27 00 00 00 00 	lea    0x0(%edi,%eiz,1),%edi
+  66:	75 d0                	jne    38 <main+0x38>
+  68:	8d 5d 94             	lea    -0x6c(%ebp),%ebx
+  6b:	8d 75 e8             	lea    -0x18(%ebp),%esi
+  6e:	66 90                	xchg   %ax,%ax
     }
     for (i = 0 ; i < c ; i++){  
         printf(1, "%c\n", *(char * )pointers[i]);
- 100:	8b 03                	mov    (%ebx),%eax
- 102:	83 ec 04             	sub    $0x4,%esp
- 105:	83 c3 04             	add    $0x4,%ebx
- 108:	0f be 00             	movsbl (%eax),%eax
- 10b:	50                   	push   %eax
- 10c:	68 d0 09 00 00       	push   $0x9d0
- 111:	6a 01                	push   $0x1
- 113:	e8 28 05 00 00       	call   640 <printf>
+  70:	8b 03                	mov    (%ebx),%eax
+  72:	83 ec 04             	sub    $0x4,%esp
+  75:	83 c3 04             	add    $0x4,%ebx
+  78:	0f be 00             	movsbl (%eax),%eax
+  7b:	50                   	push   %eax
+  7c:	68 d0 09 00 00       	push   $0x9d0
+  81:	6a 01                	push   $0x1
+  83:	e8 b8 05 00 00       	call   640 <printf>
     for (i = 0 ; i < c ; i++){  
- 118:	83 c4 10             	add    $0x10,%esp
- 11b:	39 de                	cmp    %ebx,%esi
- 11d:	75 e1                	jne    100 <main2+0x70>
+  88:	83 c4 10             	add    $0x10,%esp
+  8b:	39 de                	cmp    %ebx,%esi
+  8d:	75 e1                	jne    70 <main+0x70>
     }
   
   printf(1, "IN PARENT: Number of occupied pages before fork %d\n" ,57344 - getNumberOfFreePages());
- 11f:	bb 00 e0 00 00       	mov    $0xe000,%ebx
+  8f:	bb 00 e0 00 00       	mov    $0xe000,%ebx
     return get_number_of_free_pages();
- 124:	e8 69 04 00 00       	call   592 <get_number_of_free_pages>
+  94:	e8 f9 04 00 00       	call   592 <get_number_of_free_pages>
   printf(1, "IN PARENT: Number of occupied pages before fork %d\n" ,57344 - getNumberOfFreePages());
- 129:	89 d9                	mov    %ebx,%ecx
- 12b:	83 ec 04             	sub    $0x4,%esp
- 12e:	29 c1                	sub    %eax,%ecx
- 130:	51                   	push   %ecx
- 131:	68 50 0a 00 00       	push   $0xa50
- 136:	6a 01                	push   $0x1
- 138:	e8 03 05 00 00       	call   640 <printf>
+  99:	89 d9                	mov    %ebx,%ecx
+  9b:	83 ec 04             	sub    $0x4,%esp
+  9e:	29 c1                	sub    %eax,%ecx
+  a0:	51                   	push   %ecx
+  a1:	68 50 0a 00 00       	push   $0xa50
+  a6:	6a 01                	push   $0x1
+  a8:	e8 93 05 00 00       	call   640 <printf>
   int pid;
   if( (pid = fork()) ==0){
- 13d:	e8 a8 03 00 00       	call   4ea <fork>
- 142:	83 c4 10             	add    $0x10,%esp
- 145:	85 c0                	test   %eax,%eax
- 147:	8b 75 a4             	mov    -0x5c(%ebp),%esi
- 14a:	75 2e                	jne    17a <main2+0xea>
+  ad:	e8 38 04 00 00       	call   4ea <fork>
+  b2:	83 c4 10             	add    $0x10,%esp
+  b5:	85 c0                	test   %eax,%eax
+  b7:	8b 75 94             	mov    -0x6c(%ebp),%esi
+  ba:	75 2e                	jne    ea <main+0xea>
     return get_number_of_free_pages();
- 14c:	e8 41 04 00 00       	call   592 <get_number_of_free_pages>
+  bc:	e8 d1 04 00 00       	call   592 <get_number_of_free_pages>
       printf(1, "IN CHILD: Number of occupied pages after fork %d\n" ,57344 - getNumberOfFreePages());
- 151:	29 c3                	sub    %eax,%ebx
- 153:	51                   	push   %ecx
- 154:	53                   	push   %ebx
- 155:	68 84 0a 00 00       	push   $0xa84
- 15a:	6a 01                	push   $0x1
- 15c:	e8 df 04 00 00       	call   640 <printf>
+  c1:	29 c3                	sub    %eax,%ebx
+  c3:	51                   	push   %ecx
+  c4:	53                   	push   %ebx
+  c5:	68 84 0a 00 00       	push   $0xa84
+  ca:	6a 01                	push   $0x1
+  cc:	e8 6f 05 00 00       	call   640 <printf>
       * (char *) pointers[0] = (char) ('b');
        printf(1,"IN CHILD pointers[0] %c\n", *(char * )pointers[0]);
- 161:	83 c4 0c             	add    $0xc,%esp
+  d1:	83 c4 0c             	add    $0xc,%esp
       * (char *) pointers[0] = (char) ('b');
- 164:	c6 06 62             	movb   $0x62,(%esi)
+  d4:	c6 06 62             	movb   $0x62,(%esi)
        printf(1,"IN CHILD pointers[0] %c\n", *(char * )pointers[0]);
- 167:	6a 62                	push   $0x62
- 169:	68 bb 09 00 00       	push   $0x9bb
- 16e:	6a 01                	push   $0x1
- 170:	e8 cb 04 00 00       	call   640 <printf>
+  d7:	6a 62                	push   $0x62
+  d9:	68 bb 09 00 00       	push   $0x9bb
+  de:	6a 01                	push   $0x1
+  e0:	e8 5b 05 00 00       	call   640 <printf>
       exit();
- 175:	e8 78 03 00 00       	call   4f2 <exit>
+  e5:	e8 08 04 00 00       	call   4f2 <exit>
   }
   else{
      wait();
- 17a:	e8 7b 03 00 00       	call   4fa <wait>
+  ea:	e8 0b 04 00 00       	call   4fa <wait>
     return get_number_of_free_pages();
- 17f:	e8 0e 04 00 00       	call   592 <get_number_of_free_pages>
+  ef:	e8 9e 04 00 00       	call   592 <get_number_of_free_pages>
     printf(1, "IN PARENT: Number of occupied pages after fork %d\n" ,57344 - getNumberOfFreePages());
- 184:	29 c3                	sub    %eax,%ebx
- 186:	52                   	push   %edx
- 187:	53                   	push   %ebx
- 188:	68 b8 0a 00 00       	push   $0xab8
- 18d:	6a 01                	push   $0x1
- 18f:	e8 ac 04 00 00       	call   640 <printf>
+  f4:	29 c3                	sub    %eax,%ebx
+  f6:	52                   	push   %edx
+  f7:	53                   	push   %ebx
+  f8:	68 b8 0a 00 00       	push   $0xab8
+  fd:	6a 01                	push   $0x1
+  ff:	e8 3c 05 00 00       	call   640 <printf>
     printf(1,"IN PARENT pointers[0] %c\n", *(char * )pointers[0]);
- 194:	0f be 06             	movsbl (%esi),%eax
- 197:	83 c4 0c             	add    $0xc,%esp
- 19a:	50                   	push   %eax
- 19b:	68 d4 09 00 00       	push   $0x9d4
- 1a0:	6a 01                	push   $0x1
- 1a2:	e8 99 04 00 00       	call   640 <printf>
+ 104:	0f be 06             	movsbl (%esi),%eax
+ 107:	83 c4 0c             	add    $0xc,%esp
+ 10a:	50                   	push   %eax
+ 10b:	68 d4 09 00 00       	push   $0x9d4
+ 110:	6a 01                	push   $0x1
+ 112:	e8 29 05 00 00       	call   640 <printf>
   
   }
   exit();
- 1a7:	e8 46 03 00 00       	call   4f2 <exit>
- 1ac:	8d 74 26 00          	lea    0x0(%esi,%eiz,1),%esi
+ 117:	e8 d6 03 00 00       	call   4f2 <exit>
+ 11c:	66 90                	xchg   %ax,%ax
+ 11e:	66 90                	xchg   %ax,%ax
+
+00000120 <getNumberOfFreePages>:
+int getNumberOfFreePages(){
+ 120:	55                   	push   %ebp
+ 121:	89 e5                	mov    %esp,%ebp
+}
+ 123:	5d                   	pop    %ebp
+    return get_number_of_free_pages();
+ 124:	e9 69 04 00 00       	jmp    592 <get_number_of_free_pages>
+ 129:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
+
+00000130 <main2>:
+{   
+ 130:	55                   	push   %ebp
+ 131:	89 e5                	mov    %esp,%ebp
+ 133:	56                   	push   %esi
+ 134:	53                   	push   %ebx
+        *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
+ 135:	bb cd cc cc cc       	mov    $0xcccccccd,%ebx
+    Fmem[0] = malloc(n_of_allocations * PGSIZE);
+ 13a:	83 ec 0c             	sub    $0xc,%esp
+ 13d:	68 00 40 01 00       	push   $0x14000
+ 142:	e8 59 07 00 00       	call   8a0 <malloc>
+ 147:	89 c6                	mov    %eax,%esi
+    printf(1, "Allocation done\n");
+ 149:	58                   	pop    %eax
+ 14a:	5a                   	pop    %edx
+ 14b:	68 98 09 00 00       	push   $0x998
+ 150:	6a 01                	push   $0x1
+ 152:	e8 e9 04 00 00       	call   640 <printf>
+    sleep(500);
+ 157:	c7 04 24 f4 01 00 00 	movl   $0x1f4,(%esp)
+ 15e:	e8 1f 04 00 00       	call   582 <sleep>
+ 163:	83 c4 10             	add    $0x10,%esp
+    int i = 0;
+ 166:	31 c9                	xor    %ecx,%ecx
+ 168:	90                   	nop
+ 169:	8d b4 26 00 00 00 00 	lea    0x0(%esi,%eiz,1),%esi
+        *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
+ 170:	89 c8                	mov    %ecx,%eax
+ 172:	f7 e3                	mul    %ebx
+ 174:	c1 ea 04             	shr    $0x4,%edx
+ 177:	8d 04 92             	lea    (%edx,%edx,4),%eax
+ 17a:	89 ca                	mov    %ecx,%edx
+        i++;
+ 17c:	83 c1 01             	add    $0x1,%ecx
+        *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
+ 17f:	c1 e0 02             	shl    $0x2,%eax
+ 182:	29 c2                	sub    %eax,%edx
+ 184:	89 d0                	mov    %edx,%eax
+ 186:	c1 e0 0c             	shl    $0xc,%eax
+    while (i <50) {
+ 189:	83 f9 32             	cmp    $0x32,%ecx
+        *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
+ 18c:	c6 04 06 63          	movb   $0x63,(%esi,%eax,1)
+    while (i <50) {
+ 190:	75 de                	jne    170 <main2+0x40>
+    printf(1, "Access done1\n");
+ 192:	83 ec 08             	sub    $0x8,%esp
+ 195:	68 a9 09 00 00       	push   $0x9a9
+ 19a:	6a 01                	push   $0x1
+ 19c:	e8 9f 04 00 00       	call   640 <printf>
+    exit();
+ 1a1:	e8 4c 03 00 00       	call   4f2 <exit>
+ 1a6:	8d 76 00             	lea    0x0(%esi),%esi
+ 1a9:	8d bc 27 00 00 00 00 	lea    0x0(%edi,%eiz,1),%edi
 
 000001b0 <main1>:
 }

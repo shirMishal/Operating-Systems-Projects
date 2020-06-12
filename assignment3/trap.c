@@ -79,11 +79,12 @@ trap(struct trapframe *tf)
     break;
 
   case T_PGFLT:
-  ;
-    
+  ;//verify none includes cow
+  
     uint faulting_addr = rcr2();
     struct proc* p = myproc();
     pte_t* pte_ptr = public_walkpgdir(p->pgdir, (void *)faulting_addr, 0);
+  #if SELECTION != NONE
     if (!(pte_ptr == 0) && (*pte_ptr & PTE_U) && (*pte_ptr & PTE_PG)){
       // this is a swapped out page, we need to get it back
       for (int i = 0; i < MAX_PYSC_PAGES; i++){
@@ -96,6 +97,7 @@ trap(struct trapframe *tf)
       p->num_of_pagefaults_occurs++;
       break;
     }
+#endif
     if (!(pte_ptr == 0) && *pte_ptr & PTE_COW){
       // cprintf("trap %d\n", p->pid);
       acquire(cow_lock);
