@@ -268,11 +268,18 @@ fork(void)
     np->num_of_pages_in_swap_file = curproc->num_of_pages_in_swap_file;
   }
   #endif
+
+  cprintf("end fork 1\n");
+
   acquire(&ptable.lock);
+
+  cprintf("end fork 2\n");
 
   np->state = RUNNABLE;
 
   release(&ptable.lock);
+
+  cprintf("end fork 3\n");
 
   return pid;
 }
@@ -303,7 +310,11 @@ exit(void)
   end_op();
   curproc->cwd = 0;
 
+  #if SELECTION != NONE
+
   removeSwapFile(curproc);
+
+  #endif
 
   acquire(&ptable.lock);
 
@@ -614,7 +625,7 @@ procdump(void)
     else
       state = "???";
     #if SELECTION == NONE
-    cprintf("%d %s %s", p->pid, state, p->name);
+    cprintf("%d %s %s ", p->pid, state, p->name);
     #else
     cprintf("%d %s RAM: %d SWAP: %d PGFAULTS: %d SWAPED_OUT: %d %s", p->pid, state,  p->num_of_actual_pages_in_mem, p->num_of_pages_in_swap_file, p->num_of_pagefaults_occurs, p->num_of_pageOut_occured, p->name);
     #endif

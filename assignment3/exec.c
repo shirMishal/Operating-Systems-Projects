@@ -32,6 +32,7 @@ exec(char *path, char **argv)
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
+  cprintf("before setup\n");
   struct proc *curproc = myproc();
   #if SELECTION!=NONE
   uint pg_out_bu = 0, pg_flt_bu = 0, pg_mem_bu = 0, pg_swp_bu = 0;
@@ -41,6 +42,7 @@ exec(char *path, char **argv)
   struct file* swap_file_bu = 0;
   struct file* temp_swap_file = 0;
   #endif
+
   begin_op();
 
   if((ip = namei(path)) == 0){
@@ -59,6 +61,8 @@ exec(char *path, char **argv)
 
   if((pgdir = setupkvm()) == 0)
     goto bad;
+  // cprintf("after setup\n");
+
 #if SELECTION!=NONE
   if (curproc->pid > 2){
     // cprintf("EXEC HERE\n");
@@ -105,8 +109,11 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
+  cprintf("before alloc\n");
+  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0){
     goto bad;
+  }
+  cprintf("after alloc\n");
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   sp = sz;
 

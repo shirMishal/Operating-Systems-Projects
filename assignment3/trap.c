@@ -80,8 +80,8 @@ trap(struct trapframe *tf)
 
   case T_PGFLT:
   ;//verify none includes cow
-  
     uint faulting_addr = rcr2();
+    // cprintf("\nPGFAULT flting_addr = %d\n", faulting_addr);
     struct proc* p = myproc();
     pte_t* pte_ptr = public_walkpgdir(p->pgdir, (void *)faulting_addr, 0);
   #if SELECTION != NONE
@@ -89,17 +89,16 @@ trap(struct trapframe *tf)
       // this is a swapped out page, we need to get it back
       for (int i = 0; i < MAX_PYSC_PAGES; i++){
         if (PGROUNDDOWN((uint)(p->swapped_out_pages[i].va)) == PGROUNDDOWN(faulting_addr)){
-          // cprintf("\nPGFAULT flting_addr = %d\n", faulting_addr);
           swap_page_back(p, &(p->swapped_out_pages[i]));
           break;
         }
       }
       p->num_of_pagefaults_occurs++;
-      break;
+      return;
     }
 #endif
     if (!(pte_ptr == 0) && *pte_ptr & PTE_COW){
-      // cprintf("trap %d\n", p->pid);
+      cprintf("trap pid = %d, pa = 0x%x\n", p->pid, PTE_ADDR(*pte_ptr));
       acquire(cow_lock);
       char* ref_count = &(pg_ref_counts[PGROUNDDOWN(PTE_ADDR(*pte_ptr)) / PGSIZE]);
       if (*ref_count == 1){
@@ -108,18 +107,19 @@ trap(struct trapframe *tf)
         *pte_ptr &= (~PTE_COW);
         // cprintf("rel trap %d\n", p->pid);
         release(cow_lock);
-        break;
+        return;
       }
       else if (*ref_count > 1){
         (*ref_count)--;
         // cprintf("rel trap %d\n", p->pid);
-        release(cow_lock);
         int result = copy_page(p->pgdir, pte_ptr);
+        release(cow_lock);
+        cprintf("trap - after copy. pid = %d, pa = 0x%x\n", p->pid, PTE_ADDR(*pte_ptr));
         if (result < 0){
           p->killed = 1;
           exit();
         }
-        break;
+        return;
       }
       else{
         panic("ref count to page is 0 but it was reffed");

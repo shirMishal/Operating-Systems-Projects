@@ -5,6 +5,25 @@
 int getNumberOfFreePages(){
     return get_number_of_free_pages();
 }
+
+int main(int argc, char** argv){
+    char buffer[4096];
+    int pid = fork();
+    if (pid == 0){
+        buffer[0] = 'H';
+        buffer[1] = 'E';
+        buffer[2] = 0;
+        printf(1, "%s\n", buffer);
+        exit();
+    }
+    sleep(100);
+    buffer[0] = 'H';
+    buffer[1] = 'E';
+    buffer[2] = 0;
+    printf(1, "%s\n", buffer);
+    wait();
+    exit();
+}
 int main2(int argc, char *argv[])
 {   
     int PGSIZE = 4096;
@@ -24,7 +43,7 @@ int main2(int argc, char *argv[])
     return 0;
 }
 int
-main(void)
+main1(void)
 {
   int i = 0;
   uint c = 21;
@@ -59,7 +78,7 @@ main(void)
 }
 
 int
-main1(int argc, char *argv[])
+main10(int argc, char *argv[])
 {
     int i = 0;
     uint c = 21;

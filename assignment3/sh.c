@@ -145,7 +145,7 @@ int
 main(void)
 {
   static char buf[100];
-  int fd;
+  int fd, pid;
 
   // Ensure that three file descriptors are open.
   while((fd = open("console", O_RDWR)) >= 0){
@@ -164,8 +164,13 @@ main(void)
         printf(2, "cannot cd %s\n", buf+3);
       continue;
     }
-    if(fork1() == 0)
+    pid = fork1();
+    if (pid == 0)
+    {
+      // printf(1, "child here\n");
       runcmd(parsecmd(buf));
+    }
+    // printf(1, "my pid is %d\n", pid);
     wait();
   }
   exit();
@@ -184,6 +189,7 @@ fork1(void)
   int pid;
 
   pid = fork();
+  // printf(1, "pid = %d\n", pid);
   if(pid == -1)
     panic("fork");
   return pid;
