@@ -87,7 +87,7 @@ trap(struct trapframe *tf)
       // this is a swapped out page, we need to get it back
       for (int i = 0; i < MAX_PYSC_PAGES; i++){
         if (PGROUNDDOWN((uint)(p->swapped_out_pages[i].va)) == PGROUNDDOWN(faulting_addr)){
-          // cprintf("\nPGFAULT flting_addr = %d\n", faulting_addr);
+          cprintf("\nPGFAULT flting_addr = %d\n", faulting_addr);
           swap_page_back(p, &(p->swapped_out_pages[i]));
           break;
         }

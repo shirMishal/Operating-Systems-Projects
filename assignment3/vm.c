@@ -790,6 +790,7 @@ void swap_page_back(struct proc* p, struct pageinfo* pi_to_swapin){
     memmove(buffer, page_to_swap->va, PGSIZE);
     pi = *page_to_swap;
     page_to_swap->is_free = 1;
+    p->num_of_actual_pages_in_mem--;
     // we want to override the page we just backed up
     swap_in(p, page_to_swap);
 
@@ -817,7 +818,7 @@ int copy_page(pde_t* pgdir, pte_t* pte_ptr){
     return -1;
   }
   memmove(mem, P2V(pa), PGSIZE);
-  *pte_ptr = PTE_ADDR(P2V(mem)) | PTE_U | PTE_W | PTE_P;
+  *pte_ptr = PTE_ADDR(V2P(mem)) | PTE_U | PTE_W | PTE_P;
   return 0;
 }
 
