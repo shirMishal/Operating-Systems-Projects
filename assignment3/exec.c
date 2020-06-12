@@ -32,11 +32,11 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
-  uint pg_out_bu = 0, pg_flt_bu = 0, pg_mem_bu = 0, pg_swp_bu = 0;
-  struct pageinfo mem_pginfo_bu[MAX_PYSC_PAGES];
-  struct pageinfo swp_pginfo_bu[MAX_PYSC_PAGES];
-  struct file* swap_file_bu = 0;
-  struct file* temp_swap_file = 0;
+  // uint pg_out_bu = 0, pg_flt_bu = 0, pg_mem_bu = 0, pg_swp_bu = 0;
+  // struct pageinfo mem_pginfo_bu[MAX_PYSC_PAGES];
+  // struct pageinfo swp_pginfo_bu[MAX_PYSC_PAGES];
+  // struct file* swap_file_bu = 0;
+  // struct file* temp_swap_file = 0;
 
   begin_op();
 
@@ -57,6 +57,7 @@ exec(char *path, char **argv)
   if((pgdir = setupkvm()) == 0)
     goto bad;
 
+  #if SELECTION != NONE
   if (curproc->pid > 2){
     // cprintf("EXEC HERE\n");
     // lets backup the pageinfo of the old process for case the exec fails
@@ -74,6 +75,7 @@ exec(char *path, char **argv)
     swap_file_bu = curproc->swapFile;
     createSwapFile(curproc);
   }
+  #endif
 
   // Load program into memory.
   sz = 0;
@@ -137,6 +139,8 @@ exec(char *path, char **argv)
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
 
+
+  #if SELECTION != NONE
   if (curproc->pid > 2){
     // ##### REMOVE OLD SWAP FILE ##################
     temp_swap_file = curproc->swapFile;
@@ -145,12 +149,16 @@ exec(char *path, char **argv)
     curproc->swapFile = temp_swap_file;
     // ##### REMOVE OLD SWAP FILE ##################
   }
+  #endif
+
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;
 
  bad:
   if(pgdir){
+
+    #if SELECTION != NONE
     if (curproc->pid > 2){
       // lets restore the pageinfo of the old process
       // ******************RESTORE****************************
@@ -166,6 +174,8 @@ exec(char *path, char **argv)
       removeSwapFile(curproc);
       curproc->swapFile = swap_file_bu;
     }
+    #endif
+
     freevm(pgdir);
   }
   if(ip){

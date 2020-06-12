@@ -113,6 +113,8 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
+  
+  #if SELECTION != NONE
 
  if (p->pid > 2){
     p->num_of_actual_pages_in_mem = 0;
@@ -125,8 +127,10 @@ found:
 
     for (int i = 0; i < 16; i++){
       p->ram_pages[i].is_free = p->swapped_out_pages[i].is_free = 1;
+    }
   }
- }
+  #endif
+
   return p;
 }
 
@@ -214,7 +218,7 @@ fork(void)
     return -1;
   }
 
-  cprintf("pages : %d, curproc size : %d\n", 57344 - sys_get_number_of_free_pages_impl(), curproc->sz);
+  // cprintf("pages : %d, curproc size : %d\n", 57344 - sys_get_number_of_free_pages_impl(), curproc->sz);
 
   // Copy process state from proc.
   if((np->pgdir = cow_copyuvm(curproc->pgdir, curproc->sz)) == 0){ // (np->pid > 2 ? cow_copyuvm : copyuvm)
@@ -239,6 +243,7 @@ fork(void)
 
   pid = np->pid;
 
+  #if SELECTION != NONE
   if (curproc->pid > 2 && np->pid > 2){
     int last_not_free_in_file = MAX_PYSC_PAGES - 1;
     while (last_not_free_in_file >= 0 && curproc->swapped_out_pages[last_not_free_in_file].is_free){ last_not_free_in_file--; }
@@ -259,6 +264,7 @@ fork(void)
     np->num_of_actual_pages_in_mem = curproc->num_of_actual_pages_in_mem;
     np->num_of_pages_in_swap_file = curproc->num_of_pages_in_swap_file;
   }
+  #endif
 
   acquire(&ptable.lock);
 
@@ -295,7 +301,14 @@ exit(void)
   end_op();
   curproc->cwd = 0;
 
-  removeSwapFile(curproc);
+
+  #if SELECTION != NONE
+
+  if (curproc->pid > 2){
+    removeSwapFile(curproc);
+  }
+
+  #endif
 
   acquire(&ptable.lock);
 
@@ -336,6 +349,7 @@ wait(void)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
+        #if SELECTION != NONE
         if (p->pid > 2){
           p->num_of_pagefaults_occurs = 0;
           p->num_of_actual_pages_in_mem = 0;
@@ -348,6 +362,7 @@ wait(void)
             p->ram_pages[i].va = p->swapped_out_pages[i].va = 0;
           }
         }
+        #endif
 
         pid = p->pid;
         cow_kfree(p->kstack);
