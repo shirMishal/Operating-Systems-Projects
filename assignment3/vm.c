@@ -8,7 +8,6 @@
 #include "elf.h"
 #include "spinlock.h"
 
-#define MAX_UINT 0xFFFFFFFF
 
 struct pageinfo* find_page_to_swap(struct proc* p, pde_t* pgdir);
 static pte_t *
@@ -49,7 +48,7 @@ char* cow_kalloc(){
   }
   int acq = 0;
   // cprintf("kalloc \n");
-  if (lapicid() != 0 && !holding(cow_lock)){
+  if (lapicid() != 0){
     acq = 1;
     // cprintf("kalloc %d\n", myproc()->pid);
     acquire(cow_lock);
@@ -74,12 +73,12 @@ char* cow_kalloc(){
 //   return 0;
 // }
 // #endif
+
+// #if SELECTION == SCFIFO
 uint page_counter = 0;
-#if SELECTION == SCFIFO
-struct pageinfo* find_page_to_swap_scfifo(struct proc* p, pde_t* pgdir){
-  //cprintf("in find_page_to_swap_scfifo \n");
+struct pageinfo* find_page_to_swap(struct proc* p, pde_t* pgdir){
   while(1){
-    uint min = 0xFFFFFFFF;
+    uint min = 0x0FFFFFFF;
     struct pageinfo* min_pi = 0;
     for (int i = 0; i < MAX_PYSC_PAGES; i++){
       struct pageinfo* pi = &(p->ram_pages[i]); 
@@ -96,202 +95,15 @@ struct pageinfo* find_page_to_swap_scfifo(struct proc* p, pde_t* pgdir){
     if (*pte & PTE_A){
       min_pi->page_index = (++page_counter);
       *pte &= ~PTE_A;
-      
       // cprintf("Second chance to : ");
       // print_user_char(pgdir, min_pi->va);
     }
     else{
-      lcr3(V2P(p->pgdir));//verify
       return min_pi;
     }
   }
 }
-#endif
-#if SELECTION==NFUA
-struct pageinfo* find_page_to_swap_nfua(struct proc* p, pde_t* pgdir){
-  uint min = 0xFFFFFFFF;
-  struct pageinfo* min_pi = 0;
-  for (int i = 0; i < MAX_PYSC_PAGES; i++){
-    struct pageinfo* pi = &(p->ram_pages[i]); 
-    if (!pi->is_free && pi->aging_counter < min){
-        //cprintf("age_of_allocated: %d\n",pi->aging_counter);
-        min = pi->aging_counter;
-        min_pi = pi;
-    }
-  }
-  cprintf("min_age: %d\n",min_pi->aging_counter);
-  return min_pi;
-}
-#endif
-#if (SELECTION == NFUA)||(SELECTION == LAPA)
-void update_age(struct proc* p){
-  struct pageinfo* pi;
-  uint old_age;
-  for (int i = 0; i < MAX_PYSC_PAGES; i++){
-    pi = &(p->ram_pages[i]); 
-    if (!(pi->is_free)){
-      //shr aging_counter
-      old_age = pi->aging_counter;
-      pi->aging_counter =  pi->aging_counter >> 1;
-      //if PTE_A is 1 add 1 to MSB and PTE_A=0
-      pte_t* pte = walkpgdir(p->pgdir,(void*) pi->va, 0);
-      if(!(uint)*pte){
-        panic("can't find page from NFUA");
-      }
-      if (*pte & PTE_A){
-        pi->aging_counter = pi->aging_counter| 0x80000000;//(1<<31);
-        *pte &= ~PTE_A;
-        cprintf("PTE_A old age:  %d, new age:  %d\n",old_age, pi->aging_counter );
-      }else{
-        cprintf("old age:  %d, new age:  %d\n",old_age, pi->aging_counter );
-      }
-      
-    }
-  }
-  //lcr3(V2P(p->pgdir));//verify
-}
-#endif
-#if SELECTION==LAPA
-unsigned int count_ones(unsigned int n) { 
-    unsigned int count = 0; 
-    while (n) { 
-        count += n & 1; 
-        n >>= 1; 
-    } 
-    return count; 
-} 
-struct pageinfo* find_page_to_swap_lapa(struct proc* p, pde_t* pgdir){
-  uint num_of_ones [16];
-  for (int i = 0; i < MAX_PYSC_PAGES; i++){
-    num_of_ones[i]= MAX_UINT;
-    if (!p->ram_pages[i].is_free){
-      num_of_ones[i]= count_ones(p->ram_pages[i].aging_counter);
-    }
-    cprintf("%d, ",num_of_ones[i]);
-  }
-  cprintf("\n");
-  uint min_num_of_ones = 0xFFFFFFFF;
-  uint min_age_value = 0xFFFFFFFF;
-  struct pageinfo* min_pi = 0;
-  for (int i = 0; i < MAX_PYSC_PAGES; i++){
-    struct pageinfo* pi = &(p->ram_pages[i]); 
-    if (!pi->is_free && ((num_of_ones[i] < min_num_of_ones)||(num_of_ones[i] == min_num_of_ones &&  pi->aging_counter < min_age_value))){
-        min_num_of_ones = num_of_ones[i];
-        min_age_value = pi->aging_counter;
-        min_pi = pi;
-    }
-  }
-  cprintf("min_age: %d\n",min_pi->aging_counter);
-  return min_pi;
-}
-#endif
-#if SELECTION==AQ
-// index 0 begin of queue 15 end of queue 
-//last page in queue is to be removed next
 
-void printQ(struct proc* p){
-  for (int i = 0; i < MAX_PYSC_PAGES; i++){
-    cprintf("%d, ",p->advance_queue[i]);
-  }
-  cprintf("\n");
-}
-
-  void add_page_index_to_queue(struct proc* p, int index){
-    int i=0;
-    while (p->advance_queue[i]==-1){
-      i++;
-    }
-    i--;
-    p->advance_queue[i]= index;
-  }
-  void remove_page_index_from_q(struct proc* p, int index){
-    int i;
-    int found = 0;
-    for(  i =15; i>0; i--){
-      if(p->advance_queue[i]==index){
-        p->advance_queue[i] = -1;
-        found = 1;
-        break;
-      }
-    }
-    if (found){
-      while(i>0){
-        p->advance_queue[i] = p->advance_queue[i-1];
-        i--;
-      }
-      p->advance_queue[0] = -1;
-    }
-    
-  }
-  struct pageinfo* find_page_to_swap_aq(struct proc* p){
-    int page_index = p->advance_queue[15];
-    cprintf("page index AQ: %d\n",page_index);
-    if (page_index==-1){
-      panic("queue is empty");
-    }
-    //offset queue by 1
-    for (int i = 15; i>0; i--){
-      p->advance_queue[i] = p->advance_queue[i-1];
-    }
-    p->advance_queue[0]= -1;
-    return &(p->ram_pages[page_index]);
-  }
-  void update_queue(struct proc* p){
-    cprintf("before update: ");printQ(p);
-    int i=15;
-    while (i>0){
-      if (p->advance_queue[i] == -1){
-        break;
-      }
-      int curr_index = p->advance_queue[i];
-      int prev_index = p->advance_queue[i-1];
-      pte_t* curr_pte = walkpgdir(p->pgdir,(void*) p->ram_pages[curr_index].va, 0);
-      pte_t* prev_pte = walkpgdir(p->pgdir,(void*) p->ram_pages[prev_index].va, 0);
-      if(!(uint)*curr_pte || !(uint)*prev_pte ){
-        panic("can't find page from AQ");
-      }
-      if ((*curr_pte & PTE_A)&& ((*prev_pte & PTE_A)==0) ){//curr accessed and prev not, swich them
-        cprintf("p was accessed: %d\n", curr_index);
-        *curr_pte &= ~PTE_A;
-        p->advance_queue[i] = prev_index;
-        p->advance_queue[i-1] = curr_index;
-        i=i-2;
-      }
-      else{
-        i--;
-      }
-    }
-    cprintf("after update: "); printQ(p);
-    lcr3(V2P(p->pgdir));//verify
-  }
-
-  
-#endif
-
-#if SELECTION != NONE
-struct pageinfo* find_page_to_swap(struct proc* p, pde_t* pgdir){
-  struct pageinfo* pi;
-  
-  #if SELECTION==SCFIFO   
-    //cprintf("SELECTION is %d\n", SELECTION);
-    pi = find_page_to_swap_scfifo(p,pgdir);
-    //cprintf("returns from find_page_to_swap_scfifo\n");
-  #endif
-  #if SELECTION==NFUA
-    //cprintf("SELECTION is %d\n", SELECTION);
-    update_age(p);
-    pi = find_page_to_swap_nfua(p,pgdir);
-  #endif
-  #if SELECTION==LAPA
-    update_age(p);
-    pi = find_page_to_swap_lapa(p,pgdir);
-  #endif
-  #if SELECTION==AQ
-    update_queue(p);
-    pi = find_page_to_swap_aq(p);
-  #endif
-  return pi;
-}
 
 
 struct pageinfo* find_page_to_swap1(struct proc* p, pde_t* pgdir){
@@ -306,7 +118,25 @@ struct pageinfo* find_page_to_swap1(struct proc* p, pde_t* pgdir){
   }
   return 0;
 }
-#endif
+// #endif
+
+// #if SELECTION == NONE
+// struct pageinfo* find_page_to_swap(struct proc* p){
+  
+// }
+// #endif
+
+// #if SELECTION == NONE
+// struct pageinfo* find_page_to_swap(struct proc* p){
+  
+// }
+// #endif
+
+// #if SELECTION == NONE
+// struct pageinfo* find_page_to_swap(struct proc* p){
+  
+// }
+// #endif
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
@@ -536,9 +366,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
   char *mem;
   uint a;
-  #if SELECTION != NONE
   struct proc* p = myproc();
-  #endif
   if(newsz >= KERNBASE)
     return 0;
   if(newsz < oldsz)
@@ -549,7 +377,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   
   for(; a < newsz; a += PGSIZE){
     // our code
-    #if SELECTION != NONE
+    // #if SELECTION != NONE
     if (p->pid > 2){
       // uint number_of_pages_to_alloc = (PGROUNDUP(newsz) - a) / PGSIZE;
       // uint number_of_pages_to_swap = number_of_pages_to_alloc - (MAX_PYSC_PAGES - p->num_of_actual_pages_in_mem);
@@ -568,7 +396,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       p->num_of_actual_pages_in_mem++;
     }
     // now we are sure that we have enough free pages in ram (except maybe some race conditions)
-    #endif
+    // #endif
     mem = cow_kalloc();
     if(mem == 0){
       cprintf("allocuvm out of memory\n");
@@ -584,7 +412,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       return 0;
     }
     // cprintf("alloc2");
-    #if SELECTION != NONE
     if (p->pid > 2){
       for (int i = 0; i < MAX_PYSC_PAGES; i++){
         if (p->ram_pages[i].is_free){
@@ -592,20 +419,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
           p->ram_pages[i].is_free = 0;
           p->ram_pages[i].page_index = ++page_counter;
           p->ram_pages[i].va = (void *)a;
-          #if SELECTION==NFUA
-          p->ram_pages[i].aging_counter = 0;//NFUA
-          #endif
-          #if SELECTION==LAPA
-          p->ram_pages[i].aging_counter = 0XFFFFFFFF;//LAPA
-          #endif
-          #if SELECTION==AQ
-          add_page_index_to_queue(p, i);
-          #endif
           break;
         }
       }
     }
-    #endif
   }
   return newsz;
 }
@@ -619,10 +436,8 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
   pte_t *pte;
   uint a, pa;
-  #if SELECTION != NONE
   struct proc* p = myproc();
-  #endif
-  
+
   if(newsz >= oldsz)
     return oldsz;
 
@@ -637,27 +452,17 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
         panic("cow_kfree");
       char *v = P2V(pa);
       cow_kfree(v);
-      #if SELECTION != NONE
       if (p->pid > 2 && pgdir == p->pgdir){
         for (int i = 0; i < MAX_PYSC_PAGES; i++){
           if (p->ram_pages[i].va == (void*)a){
             p->num_of_actual_pages_in_mem--;
             p->ram_pages[i].is_free = 1;
-            #if SELECTION==LAPA
-            p->ram_pages[i].aging_counter = 0XFFFFFFFF;
-            #endif
-            #if SELECTION==NFUA
             p->ram_pages[i].aging_counter = 0;
-            #endif
-            #if SELECTION==AQ
-            remove_page_index_from_q(p,i);
-            #endif
             p->ram_pages[i].va = 0;
             break;
           }
         }
       }
-      #endif
       *pte = 0;
     }
   }
@@ -671,12 +476,10 @@ void
 freevm(pde_t *pgdir)
 {
   uint i;
-  
+  struct proc* p = myproc();
   if(pgdir == 0)
     panic("freevm: no pgdir");
   deallocuvm(pgdir, KERNBASE, 0);
-  #if SELECTION != NONE
-  struct proc* p = myproc();
   if (p->pid > 2 && p->pgdir == pgdir){
     p->num_of_actual_pages_in_mem = 0;
     p->num_of_pages_in_swap_file = 0;
@@ -687,7 +490,6 @@ freevm(pde_t *pgdir)
       p->ram_pages[i].va = p->swapped_out_pages[i].va = 0;
     }
   }
-  #endif
   for(i = 0; i < NPDENTRIES; i++){
     if(pgdir[i] & PTE_P){
       char * v = P2V(PTE_ADDR(pgdir[i]));
@@ -717,23 +519,15 @@ cow_copyuvm(pde_t *pgdir, uint sz)
   uint pa, i, flags;
   if((d = setupkvm()) == 0)
     return 0;
-  //cprintf("cow : pages = %d\n", 57344 - sys_get_number_of_free_pages_impl());
+  cprintf("cow : pages = %d\n", 57344 - sys_get_number_of_free_pages_impl());
 
   // cprintf("cow_copyuvm : pages = %d\n", 57344 - sys_get_number_of_free_pages_impl());
   for(i = 0; i < sz; i += PGSIZE){
     // getting parents PTE
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
-
-    #if SELECTION != NONE
     if(!(*pte & PTE_P) && !(*pte & PTE_PG))
       panic("copyuvm: page not present");
-
-    #else
-    if(!(*pte & PTE_P))
-      panic("copyuvm: page not present");
-    #endif
-    
 
 
     // cprintf("copy %d\n", myproc()->pid);
@@ -754,8 +548,8 @@ cow_copyuvm(pde_t *pgdir, uint sz)
     }
     // cprintf("cow2");
     // update parents flags
-    *pte |= PTE_FLAGS((PTE_W & flags ? PTE_COW : 0));
-    *pte &= (~PTE_FLAGS(PTE_W));
+    *pte |= (PTE_W & flags ? PTE_COW : 0);
+    *pte &= (~PTE_W);
   }
   return d;
 
@@ -843,7 +637,7 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
   return 0;
 }
 
-#if SELECTION != NONE
+
 //  if buffer == 0 then we put buffer <-- kernel_va(page_to_swap->va)  // p2v(phiscal(va))
 //  and use buffer to swap out from
 //  we assume that if buffer is not 0, it is kernel virtual address
@@ -876,7 +670,7 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
   }
   if (!found){
     cprintf("RAM count : %d , REAL RAM count : %d\n", p->num_of_pages_in_swap_file, count);
-    panic("SWAP OUT BALAGAN- no place in swap array\n");
+    panic("SWAP OUT BALAGAN\n");
   }
   if (index < 0 || index > 15){
     panic("we have a bug\n");
@@ -944,15 +738,7 @@ int swap_in(struct proc* p, struct pageinfo* pi){
   // updating physical address written in the page table entry
   *pte_ptr = PTE_FLAGS(*pte_ptr);
   *pte_ptr |= PTE_ADDR(V2P(mem));
-  #if SELECTION==NFUA
-  p->ram_pages[index].aging_counter = 0;//NFUA
-  #endif
-  #if SELECTION==LAPA
-  p->ram_pages[index].aging_counter = 0XFFFFFFFF;
-  #endif
-  #if SELECTION==AQ
-  add_page_index_to_queue(p, index);
-  #endif
+
   p->ram_pages[index].page_index = ++page_counter;
   p->ram_pages[index].va = va;
   int result = readFromSwapFile(p, mem, offset, PGSIZE);
@@ -995,17 +781,16 @@ void swap_page_back(struct proc* p, struct pageinfo* pi_to_swapin){
   // }
   // cprintf("RAM: %d SWAP: %d\n", ram, swap);
   if (p->num_of_actual_pages_in_mem == MAX_PYSC_PAGES && p->num_of_pages_in_swap_file == MAX_PYSC_PAGES){
-    cprintf("PGFAULT A\n");
+    // cprintf("PGFAULT A\n");
     // file and ram are full - we need temp buffer
     char* buffer = cow_kalloc();
     struct pageinfo pi;
     struct pageinfo* page_to_swap = find_page_to_swap(p, p->pgdir);
     // TODO: make sure that memmove gets virtual address
     memmove(buffer, page_to_swap->va, PGSIZE);
-    p->num_of_actual_pages_in_mem--;
-    
     pi = *page_to_swap;
     page_to_swap->is_free = 1;
+    p->num_of_actual_pages_in_mem--;
     // we want to override the page we just backed up
     swap_in(p, page_to_swap);
 
@@ -1015,30 +800,25 @@ void swap_page_back(struct proc* p, struct pageinfo* pi_to_swapin){
     swap_out(p, &pi, buffer, p->pgdir);
   }
   else if (p->num_of_actual_pages_in_mem == MAX_PYSC_PAGES && p->num_of_pages_in_swap_file < MAX_PYSC_PAGES){
-    cprintf("PGFAULT B\n");
+    // cprintf("PGFAULT B\n");
     struct pageinfo* page_to_swap = find_page_to_swap(p, p->pgdir);
     // cprintf("swap page back 2\n");
     swap_out(p, page_to_swap, 0, p->pgdir);
     swap_in(p, pi_to_swapin);
   }
   else{
-    cprintf("PGFAULT C\n");
     swap_in(p, pi_to_swapin);
   }
 }
-#endif
+
 int copy_page(pde_t* pgdir, pte_t* pte_ptr){
   uint pa = PTE_ADDR(*pte_ptr);
-  // release(cow_lock);
   char* mem = cow_kalloc();
-  // acquire(cow_lock);
   if (mem == 0){
     return -1;
   }
   memmove(mem, P2V(pa), PGSIZE);
-
-  // *pte_ptr = PTE_ADDR(P2V(mem)) | PTE_U | PTE_W | PTE_P;
-  *pte_ptr = PTE_ADDR(V2P(mem)) | PTE_FLAGS(*pte_ptr) | PTE_W | PTE_P | PTE_U;
+  *pte_ptr = PTE_ADDR(V2P(mem)) | PTE_U | PTE_W | PTE_P;
   return 0;
 }
 
@@ -1048,7 +828,3 @@ int copy_page(pde_t* pgdir, pte_t* pte_ptr){
 // Blank page.
 //PAGEBREAK!
 // Blank page.
-
-
-
-      

@@ -60,18 +60,16 @@ struct proc {
   char name[16];               // Process name (debugging)
   //Swap file. must initiate with create swap file
   struct file *swapFile;      //page file
-  
+
   // INV  : cell swapped_out_pages[i] is free iff there isnt a page that is written in offset i * PGSIZE in the swap file
   struct pageinfo swapped_out_pages[MAX_TOTAL_PAGES-MAX_PYSC_PAGES];
   struct pageinfo ram_pages[MAX_PYSC_PAGES];
-  int advance_queue[MAX_PYSC_PAGES];//each cell contains the index of page in ram_pages array
-                                    // index 0 begin of queue 15 end of queue - last page in queue is to be removed next
 
   //halpful parameters also required for debug at task 4
-  int num_of_pages_in_swap_file; //num of pages on disk
-  int num_of_actual_pages_in_mem;   // num of pages at ram ------ckeck it's correct
-  int num_of_pagefaults_occurs;
-  int num_of_pageOut_occured;
+  uint num_of_pages_in_swap_file; //num of pages on disk
+  uint num_of_actual_pages_in_mem;   // num of pages at ram ------ckeck it's correct
+  uint num_of_pagefaults_occurs;
+  uint num_of_pageOut_occured;
 };
 
 // Process memory is laid out contiguously, low addresses first:

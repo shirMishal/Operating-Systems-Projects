@@ -6,44 +6,8 @@ int getNumberOfFreePages(){
     return get_number_of_free_pages();
 }
 
-int main(int argc, char** argv){
-    char buffer[4096];
-    int pid = fork();
-    if (pid == 0){
-        buffer[0] = 'H';
-        buffer[1] = 'E';
-        buffer[2] = 0;
-        printf(1, "%s\n", buffer);
-        exit();
-    }
-    sleep(100);
-    buffer[0] = 'H';
-    buffer[1] = 'E';
-    buffer[2] = 0;
-    printf(1, "%s\n", buffer);
-    wait();
-    exit();
-}
-int main2(int argc, char *argv[])
-{   
-    int PGSIZE = 4096;
-    int n_of_allocations = 20;
-    char * Fmem[1];
-    Fmem[0] = malloc(n_of_allocations * PGSIZE);
-    printf(1, "Allocation done\n");
-    sleep(500);
-    int i = 0;
-    while (i <50) {
-        *(Fmem[0] + PGSIZE * (i % n_of_allocations) ) = 'c';
-        i++;
-    }
-    printf(1, "Access done1\n");
-    
-    exit();
-    return 0;
-}
 int
-main1(void)
+main(void)
 {
   int i = 0;
   uint c = 21;
@@ -78,7 +42,7 @@ main1(void)
 }
 
 int
-main10(int argc, char *argv[])
+main1(int argc, char *argv[])
 {
     int i = 0;
     uint c = 21;
