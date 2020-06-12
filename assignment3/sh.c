@@ -170,7 +170,7 @@ main(void)
       // printf(1, "child here\n");
       runcmd(parsecmd(buf));
     }
-    // printf(1, "my pid is %d\n", pid);
+    printf(1, "my pid is %d\n", pid);
     wait();
   }
   exit();

@@ -373,7 +373,7 @@ wait(void)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
-        #if SELECTION!= NONE 
+        #if SELECTION != NONE 
         if (p->pid > 2){
           p->num_of_pagefaults_occurs = 0;
           p->num_of_actual_pages_in_mem = 0;
