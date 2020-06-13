@@ -88,7 +88,9 @@ trap(struct trapframe *tf)
       // this is a swapped out page, we need to get it back
       for (int i = 0; i < MAX_PYSC_PAGES; i++){
         if (PGROUNDDOWN((uint)(p->swapped_out_pages[i].va)) == PGROUNDDOWN(faulting_addr)){
+          #if DEBUG==TRUE
           cprintf("\nPGFAULT flting_addr = %d\n", faulting_addr);
+          #endif
           swap_page_back(p, &(p->swapped_out_pages[i]));
           break;
         }
@@ -154,10 +156,6 @@ trap(struct trapframe *tf)
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
   if(myproc() && myproc()->state == RUNNING && tf->trapno == T_IRQ0+IRQ_TIMER){
-      // #if SELECTION==NFUA
-      // struct proc* p = myproc();
-      // update_age_nfua(p);
-      // #endif
       yield();
     }
     
