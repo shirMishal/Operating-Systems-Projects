@@ -269,17 +269,17 @@ fork(void)
   }
   #endif
 
-  cprintf("end fork 1\n");
+  // cprintf("end fork 1\n");
 
   acquire(&ptable.lock);
 
-  cprintf("end fork 2\n");
+  // cprintf("end fork 2\n");
 
   np->state = RUNNABLE;
 
   release(&ptable.lock);
 
-  cprintf("end fork 3\n");
+  // cprintf("end fork 3\n");
 
   return pid;
 }

@@ -19,7 +19,7 @@ void swap_out(struct proc* p, struct pageinfo* page_to_swap, void* buffer, pde_t
 void cow_kfree(char* to_free_kva){
   char count;
   int acq = 0;
-  if (lapicid() != 0){
+  if (lapicid() != 0 && !holding(cow_lock)){
     acq = 1;      
     // cprintf("kfree %d\n", myproc()->pid);
     acquire(cow_lock);
@@ -237,7 +237,8 @@ void printQ(struct proc* p){
     return &(p->ram_pages[page_index]);
   }
   void update_queue(struct proc* p){
-    cprintf("before update: ");printQ(p);
+    cprintf("before update: ");
+    printQ(p);
     int i=15;
     while (i>0){
       if (p->advance_queue[i] == -1){
@@ -577,7 +578,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     }
     memset(mem, 0, PGSIZE);
     // cprintf("alloc1");
-    if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
+    if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0){
       cprintf("allocuvm out of memory (2)\n");
       deallocuvm(pgdir, newsz, oldsz);
       cow_kfree(mem);
@@ -631,7 +632,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     pte = walkpgdir(pgdir, (char*)a, 0);
     if(!pte)
       a = PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
-    else if((*pte & PTE_P) != 0){
+    else if ((*pte & PTE_P) != 0){
       pa = PTE_ADDR(*pte);
       if(pa == 0)
         panic("cow_kfree");
@@ -691,7 +692,7 @@ freevm(pde_t *pgdir)
   for(i = 0; i < NPDENTRIES; i++){
     if(pgdir[i] & PTE_P){
       char * v = P2V(PTE_ADDR(pgdir[i]));
-       cow_kfree(v);
+      cow_kfree(v);
     }
   }
    cow_kfree((char*)pgdir);
@@ -714,7 +715,7 @@ cow_copyuvm(pde_t *pgdir, uint sz)
 {
   pde_t *d;
   pte_t *pte;
-  uint pa, i, flags;
+  uint pa, i, flags, newflags;
   if((d = setupkvm()) == 0)
     return 0;
   //cprintf("cow : pages = %d\n", 57344 - sys_get_number_of_free_pages_impl());
@@ -734,29 +735,43 @@ cow_copyuvm(pde_t *pgdir, uint sz)
       panic("copyuvm: page not present");
     #endif
     
-
-
+   
     // cprintf("copy %d\n", myproc()->pid);
-    acquire(cow_lock);
     // physical address
     pa = PTE_ADDR(*pte);
     // parents flags
     flags = PTE_FLAGS(*pte);
     // inc the page ref counter
+
+    newflags = flags & (~PTE_W);
+    if (flags & PTE_W){
+      newflags |= PTE_COW;
+    }
+
+    acquire(cow_lock);
+
     pg_ref_counts[PGROUNDDOWN(pa)/PGSIZE]++;
+
     release(cow_lock);
 
+
     // mapping the child to the same physical address with the COW flag and the Write flag *OFF*;
-    // cprintf("cow1");
-    if(mappages(d, (void*)i, PGSIZE, pa, (flags & (~PTE_W)) | (PTE_W & flags ? PTE_COW : 0)) < 0) {
+    // cprintf("newflags = 0x%x PA = %x\n", newflags, pa);
+
+
+    if(mappages(d, (void*)i, PGSIZE, pa, newflags) < 0) {
       // cprintf("cow2");
       goto bad;
     }
     // cprintf("cow2");
     // update parents flags
     *pte |= PTE_FLAGS((PTE_W & flags ? PTE_COW : 0));
-    *pte &= (~PTE_FLAGS(PTE_W));
+    *pte &= ~PTE_W;
   }
+  if (rcr3() != V2P(pgdir)){
+    cprintf("old %x new %x\n", rcr3(), V2P(pgdir));
+  }
+  lcr3(V2P(pgdir));
   return d;
 
 bad:
@@ -767,40 +782,40 @@ bad:
 
 // Given a parent process's page table, create a copy
 // of it for a child.
-pde_t*
-copyuvm(pde_t *pgdir, uint sz)
-{
-  pde_t *d;
-  pte_t *pte;
-  uint pa, i, flags;
-  char *mem;
+// pde_t*
+// copyuvm(pde_t *pgdir, uint sz)
+// {
+//   pde_t *d;
+//   pte_t *pte;
+//   uint pa, i, flags;
+//   char *mem;
 
-  if((d = setupkvm()) == 0)
-    return 0;
-  for(i = 0; i < sz; i += PGSIZE){
-    if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
-      panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P) && !(*pte & PTE_PG))
-      panic("copyuvm: page not present");
-    pa = PTE_ADDR(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = cow_kalloc()) == 0)
-      goto bad;
-    memmove(mem, (char*)P2V(pa), PGSIZE);
-    // cprintf("copy1");
-    if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0) {
-      // cprintf("copy2");
-       cow_kfree(mem);
-      goto bad;
-    }
-    // cprintf("copy2");
-  }
-  return d;
+//   if((d = setupkvm()) == 0)
+//     return 0;
+//   for(i = 0; i < sz; i += PGSIZE){
+//     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+//       panic("copyuvm: pte should exist");
+//     if(!(*pte & PTE_P) && !(*pte & PTE_PG))
+//       panic("copyuvm: page not present");
+//     pa = PTE_ADDR(*pte);
+//     flags = PTE_FLAGS(*pte);
+//     if((mem = cow_kalloc()) == 0)
+//       goto bad;
+//     memmove(mem, (char*)P2V(pa), PGSIZE);
+//     // cprintf("copy1");
+//     if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0) {
+//       // cprintf("copy2");
+//        cow_kfree(mem);
+//       goto bad;
+//     }
+//     // cprintf("copy2");
+//   }
+//   return d;
 
-bad:
-  freevm(d);
-  return 0;
-}
+// bad:
+//   freevm(d);
+//   return 0;
+// }
 
 //PAGEBREAK!
 // Map user virtual address to kernel address.
@@ -1028,6 +1043,7 @@ void swap_page_back(struct proc* p, struct pageinfo* pi_to_swapin){
 }
 #endif
 int copy_page(pde_t* pgdir, pte_t* pte_ptr){
+  
   uint pa = PTE_ADDR(*pte_ptr);
   // release(cow_lock);
   char* mem = cow_kalloc();
@@ -1035,6 +1051,9 @@ int copy_page(pde_t* pgdir, pte_t* pte_ptr){
   if (mem == 0){
     return -1;
   }
+
+  // cprintf("copying page old pa %x new pa %x\n", pa, V2P(mem));
+
   memmove(mem, P2V(pa), PGSIZE);
 
   // *pte_ptr = PTE_ADDR(P2V(mem)) | PTE_U | PTE_W | PTE_P;

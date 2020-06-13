@@ -32,7 +32,7 @@ exec(char *path, char **argv)
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
-  cprintf("before setup\n");
+  // cprintf("before setup\n");
   struct proc *curproc = myproc();
   #if SELECTION!=NONE
   uint pg_out_bu = 0, pg_flt_bu = 0, pg_mem_bu = 0, pg_swp_bu = 0;
@@ -109,11 +109,11 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  cprintf("before alloc\n");
+  // cprintf("before alloc\n");
   if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0){
     goto bad;
   }
-  cprintf("after alloc\n");
+  // cprintf("after alloc\n");
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   sp = sz;
 
@@ -158,6 +158,7 @@ exec(char *path, char **argv)
     // ##### REMOVE OLD SWAP FILE ##################
   }
   #endif
+  lcr3(V2P(pgdir));
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;

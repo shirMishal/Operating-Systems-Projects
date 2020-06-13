@@ -167,10 +167,10 @@ main(void)
     pid = fork1();
     if (pid == 0)
     {
-      // printf(1, "child here\n");
+      //printf(1, "inside child IF\n");
       runcmd(parsecmd(buf));
     }
-    printf(1, "my pid is %d\n", pid);
+    //printf(1, "in shell after child's if. (%s)\n", pid == 0 ? "CHILD" : "PARENT");
     wait();
   }
   exit();
