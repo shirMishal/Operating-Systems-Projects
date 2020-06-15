@@ -638,7 +638,7 @@ procdump(void)
   }
   #if SELECTION != NONE
   int currentFree = sys_get_number_of_free_pages_impl();
-  int totalFree = (PHYSTOP-EXTMEM) / PGSIZE ;///verify
+  int totalFree = PHYSTOP / PGSIZE; //(PHYSTOP-EXTMEM) / PGSIZE ;///verify
   cprintf("%d / %d free page frames in the system\n", currentFree, totalFree);
   #endif
 }
