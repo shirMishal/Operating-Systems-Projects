@@ -14,4 +14,4 @@ Replaced Xv6 processes management synchronization mechanism with lock-free imple
 ### Assignment3 - Memory Management XV6:
 Expanded the paging framework by adding secondary storage and implemented four different page replacement algorithms and COW (Copy On Write).
 
-This project was written as part of Ben-Gurion University's course "Operating Systems".
+Project were written as part of Ben-Gurion University's course "Operating Systems".
